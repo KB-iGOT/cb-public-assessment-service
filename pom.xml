@@ -9,9 +9,9 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.public.assessment</groupId>
-    <artifactId>PublicAssessmentService</artifactId>
+    <artifactId>public-assessment-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>PublicAssessmentService</name>
+    <name>public-assessment-service</name>
     <description>A assessment project for non-logedin User</description>
     <url/>
     <licenses>
