@@ -2,6 +2,7 @@ package com.assessment.service;
 
 import com.assessment.model.SBApiResponse;
 
+import javax.validation.Valid;
 import java.util.Map;
 
 public interface AssessmentServiceV5 {
@@ -16,4 +17,25 @@ public interface AssessmentServiceV5 {
      * @return The response from the assessment submission.
      */
     public SBApiResponse submitAssessmentAsync(Map<String, Object> requestBody, String email, boolean editMode);
+
+    /**
+     * Reads an assessment.
+     *
+     * @param assessmentIdentifier The identifier of the assessment.
+     * @param email                The email of the user.
+     * @param edit                 Whether the assessment is being read in edit mode.
+     * @param name                 The name of the user.
+     * @return The response from the assessment read.
+     */
+    SBApiResponse readAssessment(String assessmentIdentifier, String email, boolean edit, String name);
+
+    /**
+     * Reads a list of questions.
+     *
+     * @param requestBody The request body containing the question list parameters.
+     * @param email       The email of the user.
+     * @param edit        Whether the question list is being read in edit mode.
+     * @return The response from the question list read.
+     */
+    SBApiResponse readQuestionList(@Valid Map<String, Object> requestBody, String email, Boolean edit);
 }

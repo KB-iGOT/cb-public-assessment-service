@@ -63,6 +63,21 @@ public class AssessmentController {
         return new ResponseEntity<>(submitResponse, submitResponse.getResponseCode());
     }
 
+    @GetMapping("/v5/public/user/assessment/read/{assessmentIdentifier}")
+    public ResponseEntity<SBApiResponse> readAssessmentV5(
+            @PathVariable("assessmentIdentifier") String assessmentIdentifier,
+            @RequestHeader(Constants.EMAIL) String email, @RequestHeader(Constants.NAME) String name, @RequestParam(name = "editMode", required = false) String editMode) {
+        boolean edit = !org.apache.commons.lang.StringUtils.isEmpty(editMode) && Boolean.parseBoolean(editMode);
+        SBApiResponse readResponse = assessmentServiceV5.readAssessment(assessmentIdentifier, email, edit, name);
+        return new ResponseEntity<>(readResponse, readResponse.getResponseCode());
+    }
 
+    @PostMapping("/v5/public/assessment/question/list")
+    public ResponseEntity<SBApiResponse> readQuestionListV5(@Valid @RequestBody Map<String, Object> requestBody,
+                                                            @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
+        Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
+        SBApiResponse response = assessmentServiceV5.readQuestionList(requestBody, email, edit);
+        return new ResponseEntity<>(response, response.getResponseCode());
+    }
 
 }
