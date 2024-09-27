@@ -29,6 +29,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.assessment.util.ProjectUtil.updateErrorDetails;
+import static java.util.stream.Collectors.toList;
 
 @Service
 public class AssessmentServiceImpl implements AssessmentService {
@@ -58,6 +59,9 @@ public class AssessmentServiceImpl implements AssessmentService {
         String errMsg = "";
         try {
 
+            if(!ProjectUtil.validateEmailPattern(email)){
+                updateErrorDetails(response, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
+            }
             String encryptedEmail = encryptionService.encryptData(email);
 
             logger.info(String.format("ReadAssessment... UserId: %s, AssessmentIdentifier: %s", email, assessmentIdentifier));
