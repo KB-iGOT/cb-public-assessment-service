@@ -72,6 +72,9 @@ public class ServerProperties {
 	@Value("${redis.port}")
 	private String redisPort;
 
+	@Value("${encryption.key}")
+	private String encryptionKey;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -230,5 +233,13 @@ public class ServerProperties {
 
 	public void setRedisPort(String redisPort) {
 		this.redisPort = redisPort;
+	}
+
+	public String getEncryptionKey() {
+		return encryptionKey;
+	}
+
+	public void setEncryptionKey(String encryptionKey) {
+		this.encryptionKey = encryptionKey;
 	}
 }

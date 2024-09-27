@@ -61,6 +61,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
             if(!ProjectUtil.validateEmailPattern(email)){
                 updateErrorDetails(response, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
+                return response;
             }
             String encryptedEmail = encryptionService.encryptData(email);
 
