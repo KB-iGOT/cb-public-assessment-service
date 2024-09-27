@@ -178,6 +178,13 @@ public class Constants {
 	public static final String COURSE_ID = "courseId";
 	public static final String COMPETENCY = "competency";
 
+	public static final String MAX_ASSESSMENT_RETAKE_ATTEMPTS = "maxAssessmentRetakeAttempts";
+	public static final String SUBMIT_ASSESSMENT_RESPONSE_KEY = "submitAssessmentResponse";
+	public static final String TIME_TAKEN_FOR_ASSESSMENT= "timeTakenForAssessment";
+	public static final String RETAKE_ATTEMPT_CONSUMED = "retakeAttemptsConsumed";
+	public static final String TOTAL_PERCENTAGE = "totalPercentage";
+	public static final String TOTAL_SECTION_MARKS = "totalSectionMarks";
+	public static final String SECTION_LEVEL_DEFINITION = "sectionLevelDefinition";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");
