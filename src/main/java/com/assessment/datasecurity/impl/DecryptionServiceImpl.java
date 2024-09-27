@@ -1,8 +1,10 @@
 package com.assessment.datasecurity.impl;
 
 import com.assessment.datasecurity.DecryptionService;
+import com.assessment.util.ServerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -14,6 +16,9 @@ import java.security.Key;
 public class DecryptionServiceImpl implements DecryptionService {
 
     private static Logger log = LoggerFactory.getLogger(DecryptionServiceImpl.class);
+
+    @Autowired
+    ServerProperties serverProperties;
 
 
     private static Cipher c;
@@ -42,7 +47,7 @@ public class DecryptionServiceImpl implements DecryptionService {
         try {
             String dValue = null;
             String valueToDecrypt = value.trim();
-            String sunbird_encryption = "PassWord";
+            String sunbird_encryption = serverProperties.getEncryptionKey();
             for (int i = 0; i < ITERATIONS; i++) {
                 byte[] decordedValue = new BASE64Decoder().decodeBuffer(valueToDecrypt);
                 byte[] decValue = c.doFinal(decordedValue);

@@ -1,8 +1,10 @@
 package com.assessment.datasecurity.impl;
 
 import com.assessment.datasecurity.EncryptionService;
+import com.assessment.util.ServerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -14,6 +16,9 @@ import java.security.Key;
 public class EncryptionServiceImpl implements EncryptionService {
 
     private static Logger log = LoggerFactory.getLogger(EncryptionServiceImpl.class);
+
+    @Autowired
+    ServerProperties serverProperties;
 
 
     private static Cipher c;
@@ -41,7 +46,7 @@ public class EncryptionServiceImpl implements EncryptionService {
     @Override
     public String encryptData(String value) {
         String valueToEnc = null;
-        String encryption_key = "PassWord";
+        String encryption_key = serverProperties.getEncryptionKey();
         String eValue = value;
         for (int i = 0; i < ITERATIONS; i++) {
             valueToEnc = encryption_key + eValue;

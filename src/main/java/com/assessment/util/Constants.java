@@ -150,6 +150,35 @@ public class Constants {
 	public static final String MCQ_MCA_W = "mcq-mca-w";
 	public static final String MCQ_SCA_TF = "mcq-sca-tf";
 
+	public static final String API_SUBMIT_ASSESSMENT = "api.submit.asssessment";
+
+	public static final String ASSESSMENT_ID_INVALID_SESSION_EXPIRED = "Assessment Id Invalid/Session Expired/Redis Cache doesn't have this question list details";
+	public static final String INVALID_ASSESSMENT_ID = "Invalid Assessment Id";
+	public static final String READ_ASSESSMENT_FAILED = "Failed to read assessment hierarchy for the given AssessmentId.";
+	public static final String READ_ASSESSMENT_START_TIME_FAILED = "Failed to read the assessment start time.";
+	public static final String WRONG_SECTION_DETAILS = "Wrong section details.";
+	public static final String ASSESSMENT_SUBMIT_EXPIRED = "The Assessment submission time-period is over! Assessment can't be submitted";
+	public static final String ASSESSMENT_ALREADY_SUBMITTED = "This Assessment is already Submitted!";
+
+
+	public static final String SCORE_CUTOFF_TYPE = "scoreCutoffType";
+	public static final String PASS_PERCENTAGE = "passPercentage";
+	public static final String OVERALL_RESULT = "overallResult";
+
+	public static final String ASSESSMENT_LEVEL_SCORE_CUTOFF = "assessmentlevel";
+	public static final String SECTION_LEVEL_SCORE_CUTOFF = "sectionlevel";
+
+	public static final String ASSESSMENT_SUBMIT_INVALID_QUESTION = "The QuestionId provided don't match to the Assessment Read";
+	public static final String ASSESSMENT_SUBMIT_QUESTION_READ_FAILED = "Failed to read Question Set from DB";
+
+	public static final String TOTAL_SCORE = "totalScore";
+	public static final String SUBMIT_ASSESSMENT_RESPONSE = "submitassessmentresponse";
+	public static final String CONTENT_ID_KEY = "contentId";
+	public static final String BATCH_ID = "batchId";
+	public static final String COURSE_ID = "courseId";
+	public static final String COMPETENCY = "competency";
+
+
 	private Constants() {
 		throw new IllegalStateException("Utility class");
 	}
