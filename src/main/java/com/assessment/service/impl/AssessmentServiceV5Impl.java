@@ -13,6 +13,9 @@ import com.assessment.util.ServerProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
 import org.mortbay.util.ajax.JSON;
@@ -23,6 +26,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
+import javax.validation.Valid;
+import java.io.IOException;
 import java.sql.Timestamp;
 import java.util.*;
 
@@ -516,4 +521,380 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         logger.info("Completed getParamDetailsForQTypes with result: {}", questionSetDetailsMap);
         return questionSetDetailsMap;
     }
+
+
+    /**
+     * Reads an assessment.
+     *
+     * @param assessmentIdentifier The identifier of the assessment.
+     * @param email                The email of the user.
+     * @param editMode                 Whether the assessment is being read in edit mode.
+     * @param name                 The name of the user.
+     * @return The response from the assessment read.
+     */
+    @Override
+    public SBApiResponse readAssessment(String assessmentIdentifier, String email, boolean editMode, String name) {
+        logger.info("AssessmentServicev5Impl::readAssessment... Started");
+        SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT);
+        String errMsg = "";
+        try {
+            if (!ProjectUtil.validateEmailPattern(email)) {
+                updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
+                return outgoingResponse;
+            }
+
+            email = encryptionService.encryptData(email);
+            logger.info(String.format("ReadAssessment... UserId: %s, AssessmentIdentifier: %s", email, assessmentIdentifier));
+
+            Map<String, Object> assessmentAllDetail = null;
+
+            // Step-1 : Read assessment using assessment Id from the Assessment Service
+            if (editMode) {
+                assessmentAllDetail = assessUtilServ.fetchHierarchyFromAssessServc(assessmentIdentifier);
+            } else {
+                assessmentAllDetail = assessUtilServ
+                        .readAssessmentHierarchyFromCache(assessmentIdentifier, editMode);
+            }
+
+            if (MapUtils.isEmpty(assessmentAllDetail)) {
+                updateErrorDetails(outgoingResponse, Constants.ASSESSMENT_HIERARCHY_READ_FAILED,
+                        HttpStatus.INTERNAL_SERVER_ERROR);
+                return outgoingResponse;
+            }
+
+            //Step-2 : If Practice Assessment return without saving
+            if (Constants.PRACTICE_QUESTION_SET
+                    .equalsIgnoreCase((String) assessmentAllDetail.get(Constants.PRIMARY_CATEGORY)) || editMode) {
+                outgoingResponse.getResult().put(Constants.QUESTION_SET, readAssessmentLevelData(assessmentAllDetail));
+                return outgoingResponse;
+            }
+
+            // Step-3 : If read user submitted assessment
+            List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
+                    email, assessmentIdentifier);
+            Timestamp assessmentStartTime = new Timestamp(new Date().getTime());
+
+            if (existingDataList.isEmpty()) {
+                logger.info("Assessment read first time for user.");
+                // Add Null check for expectedDuration.throw bad questionSet Assessment Exam
+                if (null == assessmentAllDetail.get(Constants.EXPECTED_DURATION)) {
+                    errMsg = Constants.ASSESSMENT_INVALID;
+                } else {
+                    int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
+                    Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
+                            assessmentStartTime, 0);
+                    Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
+                    assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
+                    assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
+                    outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
+                    Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
+                            assessmentIdentifier, assessmentStartTime, assessmentEndTime,
+                            (Map<String, Object>) (outgoingResponse.getResult().get(Constants.QUESTION_SET)),
+                            Constants.NOT_SUBMITTED, name);
+                    if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
+                        errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
+                    }
+                }
+            } else {
+                logger.info("Assessment read... user has details... ");
+                Date existingAssessmentEndTime = (Date) (existingDataList.get(0)
+                        .get(Constants.END_TIME));
+                Timestamp existingAssessmentEndTimeTimestamp = new Timestamp(
+                        existingAssessmentEndTime.getTime());
+                if (assessmentStartTime.compareTo(existingAssessmentEndTimeTimestamp) < 0
+                        && Constants.NOT_SUBMITTED.equalsIgnoreCase((String) existingDataList.get(0).get(Constants.STATUS))) {
+                    String questionSetFromAssessmentString = (String) existingDataList.get(0)
+                            .get(Constants.ASSESSMENT_READ_RESPONSE_KEY);
+                    Map<String, Object> questionSetFromAssessment = new Gson().fromJson(
+                            questionSetFromAssessmentString, new TypeToken<HashMap<String, Object>>() {
+                            }.getType());
+                    questionSetFromAssessment.put(Constants.START_TIME, assessmentStartTime.getTime());
+                    questionSetFromAssessment.put(Constants.END_TIME,
+                            existingAssessmentEndTimeTimestamp.getTime());
+                    outgoingResponse.getResult().put(Constants.QUESTION_SET, questionSetFromAssessment);
+                } else if ((assessmentStartTime.compareTo(existingAssessmentEndTime) < 0
+                        && ((String) existingDataList.get(0).get(Constants.STATUS))
+                        .equalsIgnoreCase(Constants.SUBMITTED))
+                        || assessmentStartTime.compareTo(existingAssessmentEndTime) > 0) {
+                    logger.info(
+                            "Incase the assessment is submitted before the end time, or the endtime has exceeded, read assessment freshly ");
+                    if (assessmentAllDetail.get(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS) != null) {
+                        int retakeAttemptsAllowed = (int) assessmentAllDetail.get(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS) + 1;
+                        int retakeAttemptsConsumed = calculateAssessmentRetakeCount(email, assessmentIdentifier);
+                        if (retakeAttemptsConsumed >= retakeAttemptsAllowed) {
+                            errMsg = Constants.ASSESSMENT_RETRY_ATTEMPTS_CROSSED;
+                            updateErrorDetails(outgoingResponse, errMsg, HttpStatus.INTERNAL_SERVER_ERROR);
+                            return outgoingResponse;
+                        }
+                    }
+                    Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
+                    int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
+                    assessmentStartTime = new Timestamp(new Date().getTime());
+                    Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
+                            assessmentStartTime, 0);
+                    assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
+                    assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
+                    outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
+                    Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
+                            assessmentIdentifier, assessmentStartTime, assessmentEndTime,
+                            assessmentData, Constants.NOT_SUBMITTED, name);
+                    if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
+                        errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            errMsg = String.format("Error while reading assessment. Exception: %s", e.getMessage());
+            logger.error(errMsg, e);
+        }
+        if (StringUtils.isNotBlank(errMsg)) {
+            updateErrorDetails(outgoingResponse, errMsg, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return outgoingResponse;
+    }
+
+    private Map<String, Object> readAssessmentLevelData(Map<String, Object> assessmentAllDetail) {
+        List<String> assessmentParams = serverProperties.getAssessmentLevelParams();
+        Map<String, Object> assessmentFilteredDetail = new HashMap<>();
+        for (String assessmentParam : assessmentParams) {
+            if ((assessmentAllDetail.containsKey(assessmentParam))) {
+                assessmentFilteredDetail.put(assessmentParam, assessmentAllDetail.get(assessmentParam));
+            }
+        }
+        readSectionLevelParams(assessmentAllDetail, assessmentFilteredDetail);
+        return assessmentFilteredDetail;
+    }
+
+    private void readSectionLevelParams(Map<String, Object> assessmentAllDetail,
+                                        Map<String, Object> assessmentFilteredDetail) {
+        List<Map<String, Object>> sectionResponse = new ArrayList<>();
+        List<String> sectionIdList = new ArrayList<>();
+        List<String> sectionParams = serverProperties.getAssessmentSectionParams();
+        List<Map<String, Object>> sections = (List<Map<String, Object>>) assessmentAllDetail.get(Constants.CHILDREN);
+        String assessmentType = (String) assessmentAllDetail.get(Constants.ASSESSMENT_TYPE);
+        for (Map<String, Object> section : sections) {
+            sectionIdList.add((String) section.get(Constants.IDENTIFIER));
+            Map<String, Object> newSection = new HashMap<>();
+            for (String sectionParam : sectionParams) {
+                if (section.containsKey(sectionParam)) {
+                    newSection.put(sectionParam, section.get(sectionParam));
+                }
+            }
+            List<Map<String, Object>> questions = (List<Map<String, Object>>) section.get(Constants.CHILDREN);
+            List<String> childNodeList;
+            if (assessmentType.equalsIgnoreCase(Constants.QUESTION_WEIGHTAGE)) {
+                List<Map<String, Object>> selectedQuestionsList = processRandomizationForQuestions((Map<String, Map<String, Object>>) section.get(Constants.SECTION_LEVEL_DEFINITION), questions);
+                childNodeList = selectedQuestionsList.stream()
+                        .map(question -> (String) question.get(Constants.IDENTIFIER))
+                        .collect(toList());
+            } else {
+                int maxQuestions = (int) section.getOrDefault(Constants.MAX_QUESTIONS, questions.size());
+                List<Map<String, Object>> shuffledQuestionsList = shuffleQuestions(questions);
+                childNodeList = shuffledQuestionsList.stream()
+                        .map(question -> (String) question.get(Constants.IDENTIFIER))
+                        .limit(maxQuestions)
+                        .collect(toList());
+            }
+            Collections.shuffle(childNodeList);
+            newSection.put(Constants.CHILD_NODES, childNodeList);
+            sectionResponse.add(newSection);
+        }
+        assessmentFilteredDetail.put(Constants.CHILDREN, sectionResponse);
+        assessmentFilteredDetail.put(Constants.CHILD_NODES, sectionIdList);
+    }
+
+    /**
+     * Process randomization for selecting questions based on section level definitions and limits.
+     *
+     * @param sectionLevelDefinitionMap Map containing section level definitions with 'noOfQuestions' and 'noOfMaxQuestions'.
+     * @param questions                 List of questions to be processed.
+     * @return List of selected questions based on randomization and limits.
+     */
+    private List<Map<String, Object>> processRandomizationForQuestions(Map<String, Map<String, Object>> sectionLevelDefinitionMap, List<Map<String, Object>> questions) {
+        List<Map<String, Object>> shuffledQuestionsList = shuffleQuestions(questions);
+        List<Map<String, Object>> selectedQuestionsList = new ArrayList<>();
+        Map<String, Integer> noOfQuestionsMap = new HashMap<>();
+        Map<String, Integer> dupNoOfQuestionsMap = new HashMap<>();     // Duplicate map for tracking selected questions
+        boolean result = sectionLevelDefinitionMap.values().stream()
+                .anyMatch(proficiencyMap -> {
+                    Object maxNoOfQuestionsValue = proficiencyMap.get(Constants.NO_OF_QUESTIONS);
+                    if (maxNoOfQuestionsValue instanceof Integer) {
+                        return (Integer) maxNoOfQuestionsValue > 0;
+                    }
+                    return false;
+                });
+
+        if (!result) {
+            return questions;
+        } else {
+            // Populate noOfQuestionsMap and noOfMaxQuestionsMap from sectionLevelDefinitionMap
+            sectionLevelDefinitionMap.forEach((sectionLevelDefinitionKey, proficiencyMap) -> proficiencyMap.forEach((key, value) -> {
+                if (key.equalsIgnoreCase(Constants.NO_OF_QUESTIONS)) {
+                    noOfQuestionsMap.put(sectionLevelDefinitionKey, (Integer) value);
+                    dupNoOfQuestionsMap.put(sectionLevelDefinitionKey, 0);
+                }
+            }));
+
+            // Process each question for randomization and limit checking
+            for (Map<String, Object> question : shuffledQuestionsList) {
+                String questionLevel = (String) question.get(Constants.QUESTION_LEVEL);
+                // Check if adding one more question of this level is within limits
+                if (dupNoOfQuestionsMap.getOrDefault(questionLevel, 0) < noOfQuestionsMap.getOrDefault(questionLevel, 0)) {
+                    // Add the question to selected list
+                    selectedQuestionsList.add(question);
+                    // Update dupNoOfQuestionsMap to track the count of selected questions for this level
+                    dupNoOfQuestionsMap.put(questionLevel, dupNoOfQuestionsMap.getOrDefault(questionLevel, 0) + 1);
+                }
+            }
+            return selectedQuestionsList;
+        }
+    }
+
+    /**
+     * Shuffles the list of questions maps.
+     *
+     * @param questions The list of questions maps to be shuffled.
+     * @return A new list containing the shuffled questions maps.
+     */
+    public static List<Map<String, Object>> shuffleQuestions(List<Map<String, Object>> questions) {
+        // Create a copy of the original list to avoid modifying the input list
+        List<Map<String, Object>> shuffledQnsList = new ArrayList<>(questions);
+        // Shuffle the list using Collections.shuffle()
+        Collections.shuffle(shuffledQnsList);
+        return shuffledQnsList;
+    }
+
+    /**
+     * Reads a list of questions.
+     *
+     * @param requestBody The request body containing the question list parameters.
+     * @param email       The email of the user.
+     * @param editMode        Whether the question list is being read in edit mode.
+     * @return The response from the question list read.
+     */
+    @Override
+    public SBApiResponse readQuestionList(@Valid Map<String, Object> requestBody, String email, Boolean editMode) {
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_QUESTIONS_LIST);
+        String errMsg;
+        Map<String, String> result = new HashMap<>();
+        try {
+            List<String> identifierList = new ArrayList<>();
+            List<Object> questionList = new ArrayList<>();
+            result = validateQuestionListAPI(requestBody, email, identifierList, editMode);
+            errMsg = result.get(Constants.ERROR_MESSAGE);
+            if (StringUtils.isNotBlank(errMsg)) {
+                updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+
+            String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+            Map<String, Object> questionsMap = assessUtilServ.readQListfromCache(identifierList, assessmentIdFromRequest, editMode);
+            for (String questionId : identifierList) {
+                questionList.add(assessUtilServ.filterQuestionMapDetailV2((Map<String, Object>) questionsMap.get(questionId),
+                        result.get(Constants.PRIMARY_CATEGORY)));
+            }
+            if (errMsg.isEmpty() && identifierList.size() == questionList.size()) {
+                response.getResult().put(Constants.QUESTIONS, questionList);
+            }
+        } catch (Exception e) {
+            errMsg = String.format("Failed to fetch the question list. Exception: %s", e.getMessage());
+            logger.error(errMsg, e);
+        }
+        if (StringUtils.isNotBlank(errMsg)) {
+            updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+        }
+        return response;
+    }
+
+    private Map<String, String> validateQuestionListAPI(Map<String, Object> requestBody, String email,
+                                                        List<String> identifierList, boolean editMode) throws IOException {
+        Map<String, String> result = new HashMap<>();
+        email = encryptionService.encryptData(email);
+        String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+        if (StringUtils.isBlank(assessmentIdFromRequest)) {
+            result.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_ID_KEY_IS_NOT_PRESENT_IS_EMPTY);
+            return result;
+        }
+        identifierList.addAll(getQuestionIdList(requestBody));
+        if (identifierList.isEmpty()) {
+            result.put(Constants.ERROR_MESSAGE, Constants.IDENTIFIER_LIST_IS_EMPTY);
+            return result;
+        }
+
+        Map<String, Object> assessmentAllDetail = assessUtilServ
+                .readAssessmentHierarchyFromCache(assessmentIdFromRequest, editMode);
+
+        if (MapUtils.isEmpty(assessmentAllDetail)) {
+            result.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_HIERARCHY_READ_FAILED);
+            return result;
+        }
+        String primaryCategory = (String) assessmentAllDetail.get(Constants.PRIMARY_CATEGORY);
+        if (Constants.PRACTICE_QUESTION_SET
+                .equalsIgnoreCase(primaryCategory) || editMode) {
+            result.put(Constants.PRIMARY_CATEGORY, primaryCategory);
+            result.put(Constants.ERROR_MESSAGE, StringUtils.EMPTY);
+            return result;
+        }
+
+        Map<String, Object> userAssessmentAllDetail = new HashMap<String, Object>();
+
+        List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
+                email, assessmentIdFromRequest);
+        String questionSetFromAssessmentString = (!existingDataList.isEmpty())
+                ? (String) existingDataList.get(0).get(Constants.ASSESSMENT_READ_RESPONSE_KEY)
+                : "";
+        if (StringUtils.isNotBlank(questionSetFromAssessmentString)) {
+            userAssessmentAllDetail.putAll(mapper.readValue(questionSetFromAssessmentString,
+                    new TypeReference<Map<String, Object>>() {
+                    }));
+        } else {
+            result.put(Constants.ERROR_MESSAGE, Constants.USER_ASSESSMENT_DATA_NOT_PRESENT);
+            return result;
+        }
+
+        if (!MapUtils.isEmpty(userAssessmentAllDetail)) {
+            result.put(Constants.PRIMARY_CATEGORY, (String) userAssessmentAllDetail.get(Constants.PRIMARY_CATEGORY));
+            List<String> questionsFromAssessment = new ArrayList<>();
+            List<Map<String, Object>> sections = (List<Map<String, Object>>) userAssessmentAllDetail
+                    .get(Constants.CHILDREN);
+            for (Map<String, Object> section : sections) {
+                // Out of the list of questions received in the payload, checking if the request
+                // has only those ids which are a part of the user's latest assessment
+                // Fetching all the remaining questions details from the Redis
+                questionsFromAssessment.addAll((List<String>) section.get(Constants.CHILD_NODES));
+            }
+            if (validateQuestionListRequest(identifierList, questionsFromAssessment)) {
+                result.put(Constants.ERROR_MESSAGE, StringUtils.EMPTY);
+            } else {
+                result.put(Constants.ERROR_MESSAGE, Constants.THE_QUESTIONS_IDS_PROVIDED_DONT_MATCH);
+            }
+            return result;
+        } else {
+            result.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_ID_INVALID);
+            return result;
+        }
+    }
+
+    private List<String> getQuestionIdList(Map<String, Object> questionListRequest) {
+        try {
+            if (questionListRequest.containsKey(Constants.REQUEST)) {
+                Map<String, Object> request = (Map<String, Object>) questionListRequest.get(Constants.REQUEST);
+                if ((!ObjectUtils.isEmpty(request)) && request.containsKey(Constants.SEARCH)) {
+                    Map<String, Object> searchObj = (Map<String, Object>) request.get(Constants.SEARCH);
+                    if (!ObjectUtils.isEmpty(searchObj) && searchObj.containsKey(Constants.IDENTIFIER)
+                            && !CollectionUtils.isEmpty((List<String>) searchObj.get(Constants.IDENTIFIER))) {
+                        return (List<String>) searchObj.get(Constants.IDENTIFIER);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error(String.format("Failed to process the questionList request body. %s", e.getMessage()));
+        }
+        return Collections.emptyList();
+    }
+
+    private Boolean validateQuestionListRequest(List<String> identifierList, List<String> questionsFromAssessment) {
+        return (new HashSet<>(questionsFromAssessment).containsAll(identifierList)) ? Boolean.TRUE : Boolean.FALSE;
+    }
+
 }

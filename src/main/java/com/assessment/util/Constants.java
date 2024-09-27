@@ -185,6 +185,8 @@ public class Constants {
 	public static final String TOTAL_PERCENTAGE = "totalPercentage";
 	public static final String TOTAL_SECTION_MARKS = "totalSectionMarks";
 	public static final String SECTION_LEVEL_DEFINITION = "sectionLevelDefinition";
+	public static final String ASSESSMENT_RETRY_ATTEMPTS_CROSSED = "Maximum retry attempts for assessment reached.";
+	public static final String NO_OF_QUESTIONS = "noOfQuestions";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");
