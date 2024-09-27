@@ -4,6 +4,7 @@ package com.assessment.controller;
 import com.assessment.model.SBApiResponse;
 import com.assessment.service.AssessmentService;
 import com.assessment.service.AssessmentServiceV4;
+import com.assessment.service.AssessmentServiceV5;
 import com.assessment.util.Constants;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,8 @@ public class AssessmentController {
     @Autowired
     private AssessmentServiceV4 assessmentServiceV4;
 
+    @Autowired
+    private AssessmentServiceV5 assessmentServiceV5;
 
     @GetMapping("/v1/public/assessment/read/{assessmentIdentifier}")
     public ResponseEntity<SBApiResponse> readAssessmentV4(
@@ -33,7 +36,7 @@ public class AssessmentController {
     }
 
     @PostMapping("/v1/public/assessment/question/list")
-    public ResponseEntity<?> readQuestionListV4(@Valid @RequestBody Map<String, Object> requestBody,
+    public ResponseEntity<SBApiResponse> readQuestionListV4(@Valid @RequestBody Map<String, Object> requestBody,
                                                 @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
         Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
         SBApiResponse response = assessmentService.readQuestionList(requestBody, email, edit);
@@ -45,11 +48,21 @@ public class AssessmentController {
     // Async capability and not using Redis
     // =======================
     @PostMapping("/v4/user/assessment/submit")
-    public ResponseEntity<?> submitUserAssessmentV4(@Valid @RequestBody Map<String, Object> requestBody,
+    public ResponseEntity<SBApiResponse> submitUserAssessmentV4(@Valid @RequestBody Map<String, Object> requestBody,
                                                     @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
         Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
         SBApiResponse submitResponse = assessmentServiceV4.submitAssessmentAsync(requestBody, email, edit);
         return new ResponseEntity<>(submitResponse, submitResponse.getResponseCode());
     }
+
+    @PostMapping("/v5/user/assessment/submit")
+    public ResponseEntity<SBApiResponse> submitUserAssessmentV5(@Valid @RequestBody Map<String, Object> requestBody,
+                                                                @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
+        Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
+        SBApiResponse submitResponse = assessmentServiceV5.submitAssessmentAsync(requestBody, email, edit);
+        return new ResponseEntity<>(submitResponse, submitResponse.getResponseCode());
+    }
+
+
 
 }
