@@ -376,7 +376,7 @@ public class AssessmentUtilServiceV2Impl implements AssessmentUtilServiceV2 {
 
 	public List<Map<String, Object>> readUserSubmittedAssessmentRecords(String email, String assessmentId) {
 		Map<String, Object> propertyMap = new HashMap<String, Object>();
-		propertyMap.put(Constants.EMAIL, email);
+		propertyMap.put(Constants.USER_ID, email);
 		propertyMap.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
 		return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
 				Constants.SUNBIRD_KEY_SPACE_NAME, serverProperties.getAssessmentUserSubmitDataTable(),

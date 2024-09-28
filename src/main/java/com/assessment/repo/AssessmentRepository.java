@@ -10,9 +10,9 @@ public interface AssessmentRepository {
 	List<Map<String, Object>> fetchUserAssessmentDataFromDB(String userId, String assessmentIdentifier);
 
 	boolean addUserAssesmentDataToDB(String email, String assessmentId, Timestamp startTime, Timestamp endTime,
-									 Map<String, Object> questionSet, String status, String name);
+									 Map<String, Object> questionSet, String status, String name,String contextId);
 
 	Boolean updateUserAssesmentDataToDB(String userId, String assessmentIdentifier,
 										Map<String, Object> submitAssessmentRequest, Map<String, Object> submitAssessmentResponse, String status,
-										Date startTime,Map<String, Object> saveSubmitAssessmentRequest);
+										Date startTime,Map<String, Object> saveSubmitAssessmentRequest,String contextId);
 }

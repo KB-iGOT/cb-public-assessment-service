@@ -27,11 +27,10 @@ public class AssessmentController {
     @Autowired
     private AssessmentServiceV5 assessmentServiceV5;
 
-    @GetMapping("/v1/public/assessment/read/{assessmentIdentifier}")
-    public ResponseEntity<SBApiResponse> readAssessmentV4(
-            @PathVariable("assessmentIdentifier") String assessmentIdentifier, @RequestHeader(Constants.EMAIL) String email, @RequestHeader(Constants.NAME) String name, @RequestParam(name = "editMode", required = false) String editMode) {
+    @PostMapping("/v1/public/assessment/read")
+    public ResponseEntity<SBApiResponse> readAssessmentV4( @Valid @RequestBody Map<String, Object> requestBody, @RequestParam(name = "editMode", required = false) String editMode) {
         Boolean edit = StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
-        SBApiResponse readResponse = assessmentService.readAssessment(assessmentIdentifier, edit, email, name);
+        SBApiResponse readResponse = assessmentService.readAssessment(edit, requestBody);
         return new ResponseEntity<>(readResponse, readResponse.getResponseCode());
     }
 
@@ -63,12 +62,10 @@ public class AssessmentController {
         return new ResponseEntity<>(submitResponse, submitResponse.getResponseCode());
     }
 
-    @GetMapping("/v5/public/user/assessment/read/{assessmentIdentifier}")
-    public ResponseEntity<SBApiResponse> readAssessmentV5(
-            @PathVariable("assessmentIdentifier") String assessmentIdentifier,
-            @RequestHeader(Constants.EMAIL) String email, @RequestHeader(Constants.NAME) String name, @RequestParam(name = "editMode", required = false) String editMode) {
+    @GetMapping("/v5/public/user/assessment/read")
+    public ResponseEntity<SBApiResponse> readAssessmentV5( @Valid @RequestBody Map<String, Object> requestBody, @RequestParam(name = "editMode", required = false) String editMode) {
         boolean edit = !org.apache.commons.lang.StringUtils.isEmpty(editMode) && Boolean.parseBoolean(editMode);
-        SBApiResponse readResponse = assessmentServiceV5.readAssessment(assessmentIdentifier, email, edit, name);
+        SBApiResponse readResponse = assessmentServiceV5.readAssessment(edit, requestBody);
         return new ResponseEntity<>(readResponse, readResponse.getResponseCode());
     }
 
@@ -80,4 +77,9 @@ public class AssessmentController {
         return new ResponseEntity<>(response, response.getResponseCode());
     }
 
+    @PostMapping("/v5/quml/assessment/result")
+    public ResponseEntity<SBApiResponse> readAssessmentResultV5(@Valid @RequestBody Map<String, Object> requestBody) {
+        SBApiResponse response = assessmentServiceV5.readAssessmentResultV5(requestBody);
+        return new ResponseEntity<>(response, response.getResponseCode());
+    }
 }

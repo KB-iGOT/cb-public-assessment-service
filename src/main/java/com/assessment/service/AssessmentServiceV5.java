@@ -20,14 +20,9 @@ public interface AssessmentServiceV5 {
 
     /**
      * Reads an assessment.
-     *
-     * @param assessmentIdentifier The identifier of the assessment.
-     * @param email                The email of the user.
-     * @param edit                 Whether the assessment is being read in edit mode.
-     * @param name                 The name of the user.
      * @return The response from the assessment read.
      */
-    SBApiResponse readAssessment(String assessmentIdentifier, String email, boolean edit, String name);
+    SBApiResponse readAssessment(Boolean editMode, Map<String, Object> requestBody);
 
     /**
      * Reads a list of questions.
@@ -38,4 +33,6 @@ public interface AssessmentServiceV5 {
      * @return The response from the question list read.
      */
     SBApiResponse readQuestionList(@Valid Map<String, Object> requestBody, String email, Boolean edit);
+
+    public SBApiResponse readAssessmentResultV5(Map<String, Object> request);
 }
