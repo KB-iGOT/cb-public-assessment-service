@@ -90,6 +90,9 @@ public class ServerProperties {
 	@Value("${public.user.assessment.data}")
 	private String publicUserAssessmentData;
 
+	@Value("${assessment.primarykey.notallowed.certificate}")
+	private String assessmentPrimaryKeyNotAllowedCertificate;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -296,5 +299,13 @@ public class ServerProperties {
 
 	public void setPublicUserAssessmentData(String publicUserAssessmentData) {
 		this.publicUserAssessmentData = publicUserAssessmentData;
+	}
+
+	public List<String> getAssessmentPrimaryKeyNotAllowedCertificate() {
+		return Arrays.asList(assessmentPrimaryKeyNotAllowedCertificate.split(",", -1));
+	}
+
+	public void setAssessmentPrimaryKeyNotAllowedCertificate(String assessmentPrimaryKeyNotAllowedCertificate) {
+		this.assessmentPrimaryKeyNotAllowedCertificate = assessmentPrimaryKeyNotAllowedCertificate;
 	}
 }

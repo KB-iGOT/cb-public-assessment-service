@@ -318,7 +318,10 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
                 Boolean isAssessmentUpdatedToDB = assessmentRepository.updateUserAssesmentDataToDB(email,
                         (String) submitRequest.get(Constants.IDENTIFIER), submitRequest, result, Constants.SUBMITTED,
                         startTime, null,contextId);
-                if (Boolean.TRUE.equals(isAssessmentUpdatedToDB) && Boolean.TRUE.equals(result.get(Constants.PASS))) {
+
+                List<String> notAllowedForKafkaEvent = serverProperties.getAssessmentPrimaryKeyNotAllowedCertificate();
+                if (Boolean.TRUE.equals(isAssessmentUpdatedToDB) && Boolean.TRUE.equals(result.get(Constants.PASS)) && notAllowedForKafkaEvent.stream()
+                        .noneMatch(key -> key.equals(primaryCategory))) {
 
                     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
                     String completionDate = dateFormat.format(new Date());
