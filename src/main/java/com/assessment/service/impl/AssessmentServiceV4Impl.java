@@ -82,7 +82,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
                 updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
-            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
+            String contextId = (String) submitRequest.get(Constants.COURSE_ID);
             email = encryptionService.encryptData(email);
             String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
             String errMsg;
@@ -232,9 +232,6 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
                 Integer.parseInt(serverProperties.getUserAssessmentSubmissionDuration()));
         Timestamp submissionTime = new Timestamp(new Date().getTime());
         int time = submissionTime.compareTo(later);
-
-        // Hardcoded expiration check for testing
-        time =0;
         if (time <= 0) {
             List<String> desiredKeys = Lists.newArrayList(Constants.IDENTIFIER);
             List<Object> hierarchySectionIds = hierarchySectionList.stream()

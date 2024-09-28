@@ -98,7 +98,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
-            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
+            String contextId = (String) submitRequest.get(Constants.COURSE_ID);
             email = encryptionService.encryptData(email);
             String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
             String errMsg;
@@ -641,35 +641,11 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                     questionSetFromAssessment.put(Constants.END_TIME,
                             existingAssessmentEndTimeTimestamp.getTime());
                     outgoingResponse.getResult().put(Constants.QUESTION_SET, questionSetFromAssessment);
-                } else if ((assessmentStartTime.compareTo(existingAssessmentEndTime) < 0
-                        && ((String) existingDataList.get(0).get(Constants.STATUS))
-                        .equalsIgnoreCase(Constants.SUBMITTED))
-                        || assessmentStartTime.compareTo(existingAssessmentEndTime) > 0) {
-                    logger.info(
-                            "Incase the assessment is submitted before the end time, or the endtime has exceeded, read assessment freshly ");
-                    if (assessmentAllDetail.get(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS) != null) {
-                        int retakeAttemptsAllowed = (int) assessmentAllDetail.get(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS) + 1;
-                        int retakeAttemptsConsumed = calculateAssessmentRetakeCount(email, assessmentIdentifier);
-                        if (retakeAttemptsConsumed >= retakeAttemptsAllowed) {
-                            errMsg = Constants.ASSESSMENT_RETRY_ATTEMPTS_CROSSED;
-                            updateErrorDetails(outgoingResponse, errMsg, HttpStatus.INTERNAL_SERVER_ERROR);
-                            return outgoingResponse;
-                        }
-                    }
-                    Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
-                    int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
-                    assessmentStartTime = new Timestamp(new Date().getTime());
-                    Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
-                            assessmentStartTime, 0);
-                    assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
-                    assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
-                    outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
-                    Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
-                            assessmentIdentifier, assessmentStartTime, assessmentEndTime,
-                            assessmentData, Constants.NOT_SUBMITTED, name,contextId);
-                    if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
-                        errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
-                    }
+                } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED)) {
+                    outgoingResponse.getResult().put(Constants.RESPONSE, "User has already submitted the assessment");
+                    outgoingResponse.getParams().setStatus(Constants.SUCCESS);
+                    outgoingResponse.setResponseCode(HttpStatus.OK);
+                    return outgoingResponse;
                 }
             }
         } catch (Exception e) {
@@ -929,11 +905,14 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
     public SBApiResponse readAssessmentResultV5(Map<String, Object> request) {
         SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT_RESULT);
         try {
-            String email = (String) request.get(Constants.EMAIL);
+            Map<String, Object> requestMap = (Map<String, Object>) request.get(Constants.REQUEST);
+            String email = (String) requestMap.get(Constants.EMAIL);
+
             if(!ProjectUtil.validateEmailPattern(email)){
                 updateErrorDetails(response, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return response;
             }
+            email = encryptionService.encryptData(email);
             String errMsg = validateAssessmentReadResult(request);
             if (StringUtils.isNotBlank(errMsg)) {
                 updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
@@ -983,11 +962,6 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         if (!requestBody.containsKey(Constants.ASSESSMENT_ID_KEY)
                 || StringUtils.isBlank((String) requestBody.get(Constants.ASSESSMENT_ID_KEY))) {
             missingAttribs.add(Constants.ASSESSMENT_ID_KEY);
-        }
-
-        if (!requestBody.containsKey(Constants.BATCH_ID)
-                || StringUtils.isBlank((String) requestBody.get(Constants.BATCH_ID))) {
-            missingAttribs.add(Constants.BATCH_ID);
         }
 
         if (!requestBody.containsKey(Constants.COURSE_ID)
