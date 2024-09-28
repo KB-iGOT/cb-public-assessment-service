@@ -1,7 +1,10 @@
 package com.assessment.service.impl;
 
 import com.assessment.cassandra.utils.CassandraOperation;
+import com.assessment.datasecurity.DecryptionService;
 import com.assessment.datasecurity.EncryptionService;
+import com.assessment.kafka.Producer;
+import com.assessment.kafka.service.KafkaCertificateProducerService;
 import com.assessment.model.SBApiResponse;
 import com.assessment.repo.AssessmentRepository;
 import com.assessment.service.AssessmentServiceV5;
@@ -11,6 +14,7 @@ import com.assessment.util.Constants;
 import com.assessment.util.ProjectUtil;
 import com.assessment.util.ServerProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.gson.Gson;
@@ -22,15 +26,20 @@ import org.mortbay.util.ajax.JSON;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
 import javax.validation.Valid;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
+import static com.assessment.util.ProjectUtil.updateErrorDetails;
 import static java.util.stream.Collectors.toList;
 
 @Service
@@ -59,6 +68,17 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
     @Autowired
     private EncryptionService encryptionService;
 
+    @Autowired
+    ResourceLoader resourceLoader;
+
+    @Autowired
+    DecryptionService decryptionService;
+
+    @Autowired
+    KafkaCertificateProducerService kafkaCertificateProducerService;
+
+    @Autowired
+    Producer producer;
 
     /**
      * Submits an assessment asynchronously.
@@ -78,7 +98,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
-
+            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
             email = encryptionService.encryptData(email);
             String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
             String errMsg;
@@ -148,7 +168,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                                         });
                             }
                             writeDataToDatabaseAndTriggerKafkaEvent(submitRequest, email, questionSetFromAssessment, finalRes,
-                                    (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY));
+                                    (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY),contextId);
                         }
                         return outgoingResponse;
                     }
@@ -184,7 +204,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                                 });
                     }
                     writeDataToDatabaseAndTriggerKafkaEvent(submitRequest, email, questionSetFromAssessment, result,
-                            (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY));
+                            (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY),contextId);
                 }
                 return outgoingResponse;
             }
@@ -379,41 +399,50 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
     }
 
     private void writeDataToDatabaseAndTriggerKafkaEvent(Map<String, Object> submitRequest, String email,
-                                                         Map<String, Object> questionSetFromAssessment, Map<String, Object> result, String primaryCategory) {
+                                                         Map<String, Object> questionSetFromAssessment, Map<String, Object> result, String primaryCategory,String contextId) {
         try {
             if (questionSetFromAssessment.get(Constants.START_TIME) != null) {
                 Long existingAssessmentStartTime = (Long) questionSetFromAssessment.get(Constants.START_TIME);
                 Timestamp startTime = new Timestamp(existingAssessmentStartTime);
                 Boolean isAssessmentUpdatedToDB = assessmentRepository.updateUserAssesmentDataToDB(email,
                         (String) submitRequest.get(Constants.IDENTIFIER), submitRequest, result, Constants.SUBMITTED,
-                        startTime, null);
-                if (Boolean.TRUE.equals(isAssessmentUpdatedToDB)) {
-                    Map<String, Object> kafkaResult = new HashMap<>();
-                    kafkaResult.put(Constants.CONTENT_ID_KEY, submitRequest.get(Constants.IDENTIFIER));
-                    kafkaResult.put(Constants.COURSE_ID,
-                            submitRequest.get(Constants.COURSE_ID) != null ? submitRequest.get(Constants.COURSE_ID)
-                                    : "");
-                    kafkaResult.put(Constants.BATCH_ID,
-                            submitRequest.get(Constants.BATCH_ID) != null ? submitRequest.get(Constants.BATCH_ID) : "");
-                    kafkaResult.put(Constants.USER_ID, submitRequest.get(Constants.USER_ID));
-                    kafkaResult.put(Constants.ASSESSMENT_ID_KEY, submitRequest.get(Constants.IDENTIFIER));
-                    kafkaResult.put(Constants.PRIMARY_CATEGORY, primaryCategory);
-                    kafkaResult.put(Constants.TOTAL_SCORE, result.get(Constants.OVERALL_RESULT));
-                    if ((primaryCategory.equalsIgnoreCase("Competency Assessment")
-                            && submitRequest.containsKey("competencies_v3")
-                            && submitRequest.get("competencies_v3") != null)) {
-                        Object[] obj = (Object[]) JSON.parse((String) submitRequest.get("competencies_v3"));
-                        if (obj != null) {
-                            Object map = obj[0];
-                            ObjectMapper m = new ObjectMapper();
-                            Map<String, Object> props = m.convertValue(map, Map.class);
-                            kafkaResult.put(Constants.COMPETENCY, props.isEmpty() ? "" : props);
-                            System.out.println(obj);
+                        startTime, null,contextId);
+                if (Boolean.TRUE.equals(isAssessmentUpdatedToDB) && Boolean.TRUE.equals(result.get(Constants.PASS))) {
 
-                        }
-                        System.out.println(obj);
-                    }
-                    //kafka topic push code needs to be added
+                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                    String completionDate = dateFormat.format(new Date());
+
+                    List<Map<String, Object>> submitedAssessmentDetails = assessmentRepository.fetchUserAssessmentDataFromDB(email, (String) submitRequest.get(Constants.IDENTIFIER));
+                    String recipientName = (String) submitedAssessmentDetails.get(0).get(Constants.NAME);
+
+                    Map<String, Object> propertyMap = new HashMap<>();
+                    propertyMap.put(Constants.IDENTIFIER, submitRequest.get(Constants.COURSE_ID));
+                    List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), propertyMap, null);
+
+                    String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
+                    Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
+                    String courseProvider = (String) contentHierarchyObj.get(Constants.SOURCE);
+                    String courseName = (String) contentHierarchyObj.get(Constants.NAME);
+                    String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
+
+
+                    Resource resource = resourceLoader.getResource("classpath:certificate-kafka-json.json");
+                    InputStream inputStream = resource.getInputStream();
+                    JsonNode jsonNode = mapper.readTree(inputStream);
+
+                    Map<String, Object> certificateRequest = new HashMap<>();
+                    certificateRequest.put(Constants.USER_ID, decryptionService.decryptData(email));
+                    certificateRequest.put(Constants.ASSESSMENT_ID_KEY, submitRequest.get(Constants.IDENTIFIER));
+                    certificateRequest.put(Constants.COURSE_ID, submitRequest.get(Constants.COURSE_ID));
+                    certificateRequest.put(Constants.COMPLETION_DATE, completionDate);
+                    certificateRequest.put(Constants.PROVIDER_NAME, courseProvider);
+                    certificateRequest.put(Constants.COURSE_NAME, courseName);
+                    certificateRequest.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+                    certificateRequest.put(Constants.RECIPIENT_NAME, recipientName);
+                    kafkaCertificateProducerService.replacePlaceholders(jsonNode, certificateRequest);
+                    String jsonNodeStr = mapper.writeValueAsString(jsonNode);
+                    producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNodeStr);
+
                 }
             }
         } catch (Exception e) {
@@ -526,23 +555,23 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
     /**
      * Reads an assessment.
      *
-     * @param assessmentIdentifier The identifier of the assessment.
-     * @param email                The email of the user.
-     * @param editMode                 Whether the assessment is being read in edit mode.
-     * @param name                 The name of the user.
+     * @param editMode Whether the assessment is being read in edit mode.
      * @return The response from the assessment read.
      */
     @Override
-    public SBApiResponse readAssessment(String assessmentIdentifier, String email, boolean editMode, String name) {
+    public SBApiResponse readAssessment(Boolean editMode, Map<String, Object> requestBody){
         logger.info("AssessmentServicev5Impl::readAssessment... Started");
         SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT);
         String errMsg = "";
         try {
+            String email = (String) requestBody.get(Constants.EMAIL);
+            String name = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+            String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
+            String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
             if (!ProjectUtil.validateEmailPattern(email)) {
                 updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
-
             email = encryptionService.encryptData(email);
             logger.info(String.format("ReadAssessment... UserId: %s, AssessmentIdentifier: %s", email, assessmentIdentifier));
 
@@ -590,7 +619,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                     Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
                             assessmentIdentifier, assessmentStartTime, assessmentEndTime,
                             (Map<String, Object>) (outgoingResponse.getResult().get(Constants.QUESTION_SET)),
-                            Constants.NOT_SUBMITTED, name);
+                            Constants.NOT_SUBMITTED, name,contextId);
                     if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
                         errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
                     }
@@ -637,7 +666,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                     outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
                     Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
                             assessmentIdentifier, assessmentStartTime, assessmentEndTime,
-                            assessmentData, Constants.NOT_SUBMITTED, name);
+                            assessmentData, Constants.NOT_SUBMITTED, name,contextId);
                     if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
                         errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
                     }
@@ -895,6 +924,83 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
 
     private Boolean validateQuestionListRequest(List<String> identifierList, List<String> questionsFromAssessment) {
         return (new HashSet<>(questionsFromAssessment).containsAll(identifierList)) ? Boolean.TRUE : Boolean.FALSE;
+    }
+
+    public SBApiResponse readAssessmentResultV5(Map<String, Object> request) {
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT_RESULT);
+        try {
+            String email = (String) request.get(Constants.EMAIL);
+            if(!ProjectUtil.validateEmailPattern(email)){
+                updateErrorDetails(response, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+            String errMsg = validateAssessmentReadResult(request);
+            if (StringUtils.isNotBlank(errMsg)) {
+                updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+
+            Map<String, Object> requestBody = (Map<String, Object>) request.get(Constants.REQUEST);
+            String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+
+            List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
+                    email, assessmentIdentifier);
+
+            if (existingDataList.isEmpty()) {
+                updateErrorDetails(response, Constants.USER_ASSESSMENT_DATA_NOT_PRESENT, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+
+            String statusOfLatestObject = (String) existingDataList.get(0).get(Constants.STATUS);
+            if (!Constants.SUBMITTED.equalsIgnoreCase(statusOfLatestObject)) {
+                response.getResult().put(Constants.STATUS_IS_IN_PROGRESS, true);
+                return response;
+            }
+
+            String latestResponse = (String) existingDataList.get(0).get(Constants.SUBMIT_ASSESSMENT_RESPONSE_KEY);
+            if (StringUtils.isNotBlank(latestResponse)) {
+                response.putAll(mapper.readValue(latestResponse, new TypeReference<Map<String, Object>>() {
+                }));
+            }
+        } catch (Exception e) {
+            String errMsg = String.format("Failed to process Assessment read response. Excption: %s", e.getMessage());
+            updateErrorDetails(response, errMsg, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return response;
+    }
+
+    private String validateAssessmentReadResult(Map<String, Object> request) {
+        String errMsg = "";
+        if (MapUtils.isEmpty(request) || !request.containsKey(Constants.REQUEST)) {
+            return Constants.INVALID_REQUEST;
+        }
+
+        Map<String, Object> requestBody = (Map<String, Object>) request.get(Constants.REQUEST);
+        if (MapUtils.isEmpty(requestBody)) {
+            return Constants.INVALID_REQUEST;
+        }
+        List<String> missingAttribs = new ArrayList<String>();
+        if (!requestBody.containsKey(Constants.ASSESSMENT_ID_KEY)
+                || StringUtils.isBlank((String) requestBody.get(Constants.ASSESSMENT_ID_KEY))) {
+            missingAttribs.add(Constants.ASSESSMENT_ID_KEY);
+        }
+
+        if (!requestBody.containsKey(Constants.BATCH_ID)
+                || StringUtils.isBlank((String) requestBody.get(Constants.BATCH_ID))) {
+            missingAttribs.add(Constants.BATCH_ID);
+        }
+
+        if (!requestBody.containsKey(Constants.COURSE_ID)
+                || StringUtils.isBlank((String) requestBody.get(Constants.COURSE_ID))) {
+            missingAttribs.add(Constants.COURSE_ID);
+        }
+
+        if (!missingAttribs.isEmpty()) {
+            errMsg = "One or more mandatory fields are missing in Request. Mandatory fields are : "
+                    + missingAttribs.toString();
+        }
+
+        return errMsg;
     }
 
 }

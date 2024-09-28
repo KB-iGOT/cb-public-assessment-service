@@ -53,11 +53,15 @@ public class AssessmentServiceImpl implements AssessmentService {
 
 
     @Override
-    public SBApiResponse readAssessment(String assessmentIdentifier, Boolean editMode, String email, String name) {
+    public SBApiResponse readAssessment( Boolean editMode, Map<String, Object> requestBody) {
         logger.info("AssessmentServiceImpl::readAssessment... Started");
         SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT);
         String errMsg = "";
         try {
+            String email = (String) requestBody.get(Constants.EMAIL);
+            String name = (String) requestBody.get(Constants.NAME);
+            String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
+            String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
 
             if(!ProjectUtil.validateEmailPattern(email)){
                 updateErrorDetails(response, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
@@ -106,7 +110,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                     Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(encryptedEmail,
                             assessmentIdentifier, assessmentStartTime, assessmentEndTime,
                             (Map<String, Object>) (response.getResult().get(Constants.QUESTION_SET)),
-                            Constants.NOT_SUBMITTED, name);
+                            Constants.NOT_SUBMITTED, name,contextId);
                     if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
                         errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
                     }
@@ -145,7 +149,7 @@ public class AssessmentServiceImpl implements AssessmentService {
 
                     Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(encryptedEmail,
                             assessmentIdentifier, assessmentStartTime, assessmentEndTime,
-                            assessmentData, Constants.NOT_SUBMITTED, name);
+                            assessmentData, Constants.NOT_SUBMITTED, name,contextId);
                     if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
                         errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
                     }

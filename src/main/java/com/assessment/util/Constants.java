@@ -187,6 +187,18 @@ public class Constants {
 	public static final String SECTION_LEVEL_DEFINITION = "sectionLevelDefinition";
 	public static final String ASSESSMENT_RETRY_ATTEMPTS_CROSSED = "Maximum retry attempts for assessment reached.";
 	public static final String NO_OF_QUESTIONS = "noOfQuestions";
+	public static final String ASSESSMENT_IDENTIFIER="assessmentIdentifier";
+	public static final String CONTEXT_ID="contextId";
+	public static final String API_READ_ASSESSMENT_RESULT = "api.assessment.read.result";
+	public static final String INVALID_REQUEST = "Invalid Request";
+	public static final String STATUS_IS_IN_PROGRESS = "isInProgress";
+	public static final String SOURCE = "source";
+	public static final String POSTER_IMAGE = "posterImage";
+	public static final String COMPLETION_DATE = "completionDate";
+	public static final String PROVIDER_NAME = "providerName";
+	public static final String RECIPIENT_NAME = "recipientName";
+	public static final String COURSE_NAME = "courseName";
+	public static final String COURSE_POSTER_IMAGE ="coursePosterImage";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");

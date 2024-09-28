@@ -75,6 +75,21 @@ public class ServerProperties {
 	@Value("${encryption.key}")
 	private String encryptionKey;
 
+	@Value("${svgTemplate}")
+	private String svgTemplate;
+
+	@Value("${content.hierarchy.namespace}")
+	private String contentHierarchyNamespace;
+
+	@Value("${content.hierarchy.table}")
+	private String contentHierarchyTable;
+
+	@Value("${kafka.topics.public.assessment.certificate}")
+	private String kafkaTopicsPublicAssessmentCertificate;
+
+	@Value("${public.user.assessment.data}")
+	private String publicUserAssessmentData;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -241,5 +256,45 @@ public class ServerProperties {
 
 	public void setEncryptionKey(String encryptionKey) {
 		this.encryptionKey = encryptionKey;
+	}
+
+	public String getSvgTemplate() {
+		return svgTemplate;
+	}
+
+	public void setSvgTemplate(String svgTemplate) {
+		this.svgTemplate = svgTemplate;
+	}
+
+	public String getContentHierarchyNamespace() {
+		return contentHierarchyNamespace;
+	}
+
+	public void setContentHierarchyNamespace(String contentHierarchyNamespace) {
+		this.contentHierarchyNamespace = contentHierarchyNamespace;
+	}
+
+	public String getContentHierarchyTable() {
+		return contentHierarchyTable;
+	}
+
+	public void setContentHierarchyTable(String contentHierarchyTable) {
+		this.contentHierarchyTable = contentHierarchyTable;
+	}
+
+	public String getKafkaTopicsPublicAssessmentCertificate() {
+		return kafkaTopicsPublicAssessmentCertificate;
+	}
+
+	public void setKafkaTopicsPublicAssessmentCertificate(String kafkaTopicsPublicAssessmentCertificate) {
+		this.kafkaTopicsPublicAssessmentCertificate = kafkaTopicsPublicAssessmentCertificate;
+	}
+
+	public String getPublicUserAssessmentData() {
+		return publicUserAssessmentData;
+	}
+
+	public void setPublicUserAssessmentData(String publicUserAssessmentData) {
+		this.publicUserAssessmentData = publicUserAssessmentData;
 	}
 }

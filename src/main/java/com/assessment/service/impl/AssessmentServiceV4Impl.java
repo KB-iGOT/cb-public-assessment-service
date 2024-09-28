@@ -1,6 +1,10 @@
 package com.assessment.service.impl;
 
+import com.assessment.cassandra.utils.CassandraOperation;
+import com.assessment.datasecurity.DecryptionService;
 import com.assessment.datasecurity.EncryptionService;
+import com.assessment.kafka.Producer;
+import com.assessment.kafka.service.KafkaCertificateProducerService;
 import com.assessment.model.SBApiResponse;
 import com.assessment.repo.AssessmentRepository;
 import com.assessment.service.AssessmentServiceV4;
@@ -9,6 +13,7 @@ import com.assessment.util.Constants;
 import com.assessment.util.ProjectUtil;
 import com.assessment.util.ServerProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import org.apache.commons.collections.MapUtils;
@@ -17,11 +22,15 @@ import org.mortbay.util.ajax.JSON;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
+import java.io.InputStream;
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -49,6 +58,21 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
     @Autowired
     ObjectMapper mapper;
 
+    @Autowired
+    CassandraOperation cassandraOperation;
+
+    @Autowired
+    ResourceLoader resourceLoader;
+
+    @Autowired
+    DecryptionService decryptionService;
+
+    @Autowired
+    KafkaCertificateProducerService kafkaCertificateProducerService;
+
+    @Autowired
+    Producer producer;
+
     public SBApiResponse submitAssessmentAsync(Map<String, Object> submitRequest, String email, boolean editMode) {
         logger.info("AssessmentServiceV4Impl::submitAssessmentAsync.. started");
         SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_SUBMIT_ASSESSMENT);
@@ -58,7 +82,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
                 updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
-
+            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
             email = encryptionService.encryptData(email);
             String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
             String errMsg;
@@ -122,7 +146,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
                                         });
                             }
                             writeDataToDatabaseAndTriggerKafkaEvent(submitRequest, email, questionSetFromAssessment, finalRes,
-                                    (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY));
+                                    (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY),contextId);
                         }
 
                         return outgoingResponse;
@@ -154,7 +178,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
                                 });
                     }
                     writeDataToDatabaseAndTriggerKafkaEvent(submitRequest, email, questionSetFromAssessment, result,
-                            (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY));
+                            (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY),contextId);
                 }
                 return outgoingResponse;
             }
@@ -289,41 +313,50 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
     }
 
     private void writeDataToDatabaseAndTriggerKafkaEvent(Map<String, Object> submitRequest, String email,
-                                                         Map<String, Object> questionSetFromAssessment, Map<String, Object> result, String primaryCategory) {
+                                                         Map<String, Object> questionSetFromAssessment, Map<String, Object> result, String primaryCategory,String contextId) {
         try {
             if (questionSetFromAssessment.get(Constants.START_TIME) != null) {
                 Long existingAssessmentStartTime = (Long) questionSetFromAssessment.get(Constants.START_TIME);
                 Timestamp startTime = new Timestamp(existingAssessmentStartTime);
                 Boolean isAssessmentUpdatedToDB = assessmentRepository.updateUserAssesmentDataToDB(email,
                         (String) submitRequest.get(Constants.IDENTIFIER), submitRequest, result, Constants.SUBMITTED,
-                        startTime, null);
+                        startTime, null,contextId);
                 if (Boolean.TRUE.equals(isAssessmentUpdatedToDB) && Boolean.TRUE.equals(result.get(Constants.PASS))) {
-                    Map<String, Object> kafkaResult = new HashMap<>();
-                    kafkaResult.put(Constants.CONTENT_ID_KEY, submitRequest.get(Constants.IDENTIFIER));
-                    kafkaResult.put(Constants.COURSE_ID,
-                            submitRequest.get(Constants.COURSE_ID) != null ? submitRequest.get(Constants.COURSE_ID)
-                                    : "");
-                    kafkaResult.put(Constants.BATCH_ID,
-                            submitRequest.get(Constants.BATCH_ID) != null ? submitRequest.get(Constants.BATCH_ID) : "");
-                    kafkaResult.put(Constants.USER_ID, submitRequest.get(Constants.USER_ID));
-                    kafkaResult.put(Constants.ASSESSMENT_ID_KEY, submitRequest.get(Constants.IDENTIFIER));
-                    kafkaResult.put(Constants.PRIMARY_CATEGORY, primaryCategory);
-                    kafkaResult.put(Constants.TOTAL_SCORE, result.get(Constants.OVERALL_RESULT));
-                    if ((primaryCategory.equalsIgnoreCase("Competency Assessment")
-                            && submitRequest.containsKey("competencies_v3")
-                            && submitRequest.get("competencies_v3") != null)) {
-                        Object[] obj = (Object[]) JSON.parse((String) submitRequest.get("competencies_v3"));
-                        if (obj != null) {
-                            Object map = obj[0];
-                            ObjectMapper m = new ObjectMapper();
-                            Map<String, Object> props = m.convertValue(map, Map.class);
-                            kafkaResult.put(Constants.COMPETENCY, props.isEmpty() ? "" : props);
-                            System.out.println(obj);
 
-                        }
-                        System.out.println(obj);
-                    }
-                    //        kafkaProducer.push(serverProperties.getAssessmentSubmitTopic(), kafkaResult);
+                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                    String completionDate = dateFormat.format(new Date());
+
+                    List<Map<String, Object>> submitedAssessmentDetails = assessmentRepository.fetchUserAssessmentDataFromDB(email, (String) submitRequest.get(Constants.IDENTIFIER));
+                    String recipientName = (String) submitedAssessmentDetails.get(0).get(Constants.NAME);
+
+                    Map<String, Object> propertyMap = new HashMap<>();
+                    propertyMap.put(Constants.IDENTIFIER, submitRequest.get(Constants.COURSE_ID));
+                    List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), propertyMap, null);
+
+                    String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
+                    Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
+                    String courseProvider = (String) contentHierarchyObj.get(Constants.SOURCE);
+                    String courseName = (String) contentHierarchyObj.get(Constants.NAME);
+                    String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
+
+
+                    Resource resource = resourceLoader.getResource("classpath:certificate-kafka-json.json");
+                    InputStream inputStream = resource.getInputStream();
+                    JsonNode jsonNode = mapper.readTree(inputStream);
+
+                    Map<String, Object> certificateRequest = new HashMap<>();
+                    certificateRequest.put(Constants.USER_ID, decryptionService.decryptData(email));
+                    certificateRequest.put(Constants.ASSESSMENT_ID_KEY, submitRequest.get(Constants.IDENTIFIER));
+                    certificateRequest.put(Constants.COURSE_ID, submitRequest.get(Constants.COURSE_ID));
+                    certificateRequest.put(Constants.COMPLETION_DATE, completionDate);
+                    certificateRequest.put(Constants.PROVIDER_NAME, courseProvider);
+                    certificateRequest.put(Constants.COURSE_NAME, courseName);
+                    certificateRequest.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+                    certificateRequest.put(Constants.RECIPIENT_NAME, recipientName);
+                    kafkaCertificateProducerService.replacePlaceholders(jsonNode, certificateRequest);
+                    String jsonNodeStr = mapper.writeValueAsString(jsonNode);
+                    producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNodeStr);
+
                 }
             }
         } catch (Exception e) {
