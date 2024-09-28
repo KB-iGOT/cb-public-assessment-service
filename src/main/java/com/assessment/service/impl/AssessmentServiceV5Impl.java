@@ -565,7 +565,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         String errMsg = "";
         try {
             String email = (String) requestBody.get(Constants.EMAIL);
-            String name = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+            String name = (String) requestBody.get(Constants.NAME);
             String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
             String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
             if (!ProjectUtil.validateEmailPattern(email)) {

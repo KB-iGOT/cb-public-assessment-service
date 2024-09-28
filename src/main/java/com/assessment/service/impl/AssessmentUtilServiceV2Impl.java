@@ -379,7 +379,7 @@ public class AssessmentUtilServiceV2Impl implements AssessmentUtilServiceV2 {
 		propertyMap.put(Constants.USER_ID, email);
 		propertyMap.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
 		return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
-				Constants.SUNBIRD_KEY_SPACE_NAME, serverProperties.getAssessmentUserSubmitDataTable(),
+				Constants.SUNBIRD_KEY_SPACE_NAME, serverProperties.getPublicUserAssessmentData(),
 				propertyMap, null);
 	}
 
