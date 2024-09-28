@@ -62,7 +62,7 @@ public class AssessmentController {
         return new ResponseEntity<>(submitResponse, submitResponse.getResponseCode());
     }
 
-    @GetMapping("/v5/public/user/assessment/read")
+    @PostMapping("/v5/public/user/assessment/read")
     public ResponseEntity<SBApiResponse> readAssessmentV5( @Valid @RequestBody Map<String, Object> requestBody, @RequestParam(name = "editMode", required = false) String editMode) {
         boolean edit = !org.apache.commons.lang.StringUtils.isEmpty(editMode) && Boolean.parseBoolean(editMode);
         SBApiResponse readResponse = assessmentServiceV5.readAssessment(edit, requestBody);
