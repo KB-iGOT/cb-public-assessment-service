@@ -9,5 +9,5 @@ public interface AssessmentService {
 
     public SBApiResponse readAssessment(Boolean editMode, Map<String, Object> requestBody);
 
-    public SBApiResponse readQuestionList(Map<String, Object> requestBody, String email, boolean editMode);
+    public SBApiResponse readQuestionList(Map<String, Object> requestBody, boolean editMode);
 }
