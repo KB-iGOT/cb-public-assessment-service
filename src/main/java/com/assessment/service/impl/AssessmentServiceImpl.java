@@ -100,17 +100,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                 if (null == assessmentAllDetail.get(Constants.EXPECTED_DURATION)) {
                     errMsg = Constants.ASSESSMENT_INVALID;
                 } else {
-                    int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
-                    Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
-                            assessmentStartTime, 0);
-                    Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
-                    assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
-                    assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
-                    response.getResult().put(Constants.QUESTION_SET, assessmentData);
-                    Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(encryptedEmail,
-                            assessmentIdentifier, assessmentStartTime, assessmentEndTime,
-                            (Map<String, Object>) (response.getResult().get(Constants.QUESTION_SET)),
-                            Constants.NOT_SUBMITTED, name,contextId);
+                    Boolean isAssessmentUpdatedToDB = addAssessmentDataToDB(assessmentAllDetail, assessmentStartTime, response, encryptedEmail, assessmentIdentifier, name, contextId);
                     if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
                         errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
                     }
@@ -132,27 +122,18 @@ public class AssessmentServiceImpl implements AssessmentService {
                     questionSetFromAssessment.put(Constants.END_TIME,
                             existingAssessmentEndTimeTimestamp.getTime());
                     response.getResult().put(Constants.QUESTION_SET, questionSetFromAssessment);
-                } else if ((assessmentStartTime.compareTo(existingAssessmentEndTime) < 0
-                        && ((String) existingDataList.get(0).get(Constants.STATUS))
-                        .equalsIgnoreCase(Constants.SUBMITTED))
-                        || assessmentStartTime.compareTo(existingAssessmentEndTime) > 0) {
-                    logger.info(
-                            "Incase the assessment is submitted before the end time, or the endtime has exceeded, read assessment freshly ");
-                    Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
-                    int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
-                    assessmentStartTime = new Timestamp(new java.util.Date().getTime());
-                    Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
-                            assessmentStartTime, 0);
-                    assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
-                    assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
-                    response.getResult().put(Constants.QUESTION_SET, assessmentData);
-
-                    Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(encryptedEmail,
-                            assessmentIdentifier, assessmentStartTime, assessmentEndTime,
-                            assessmentData, Constants.NOT_SUBMITTED, name,contextId);
+                } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED) && !(Boolean) existingDataList.get(0).get(Constants.PASS_STATUS)) {
+                    Boolean isAssessmentUpdatedToDB = addAssessmentDataToDB(assessmentAllDetail, assessmentStartTime, response, encryptedEmail, assessmentIdentifier, name, contextId);
                     if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
                         errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
+                        updateErrorDetails(response, errMsg,
+                                HttpStatus.INTERNAL_SERVER_ERROR);
                     }
+                } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED)  && (Boolean) existingDataList.get(0).get(Constants.PASS_STATUS)) {
+                    response.getResult().put(Constants.RESPONSE, "User has already submitted the assessment");
+                    response.getParams().setStatus(Constants.SUCCESS);
+                    response.setResponseCode(HttpStatus.OK);
+                    return response;
                 }
             }
         } catch (Exception e) {
@@ -163,6 +144,20 @@ public class AssessmentServiceImpl implements AssessmentService {
             updateErrorDetails(response, errMsg, HttpStatus.INTERNAL_SERVER_ERROR);
         }
         return response;
+    }
+
+    private Boolean addAssessmentDataToDB(Map<String, Object> assessmentAllDetail, Timestamp assessmentStartTime, SBApiResponse response, String encryptedEmail, String assessmentIdentifier, String name, String contextId) {
+        int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
+        Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
+                assessmentStartTime, 0);
+        Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
+        assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
+        assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
+        response.getResult().put(Constants.QUESTION_SET, assessmentData);
+        return assessmentRepository.addUserAssesmentDataToDB(encryptedEmail,
+                assessmentIdentifier, assessmentStartTime, assessmentEndTime,
+                (Map<String, Object>) (response.getResult().get(Constants.QUESTION_SET)),
+                Constants.NOT_SUBMITTED, name, contextId);
     }
 
     private Map<String, Object> readAssessmentLevelData(Map<String, Object> assessmentAllDetail) {
