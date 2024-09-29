@@ -73,16 +73,17 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
     @Autowired
     Producer producer;
 
-    public SBApiResponse submitAssessmentAsync(Map<String, Object> submitRequest, String email, boolean editMode) {
+    public SBApiResponse submitAssessmentAsync(Map<String, Object> submitRequest, boolean editMode) {
         logger.info("AssessmentServiceV4Impl::submitAssessmentAsync.. started");
         SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_SUBMIT_ASSESSMENT);
         try {
 
+            String email = (String) submitRequest.get(Constants.EMAIL);
             if (!ProjectUtil.validateEmailPattern(email)) {
                 updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
-            String contextId = (String) submitRequest.get(Constants.COURSE_ID);
+            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
             email = encryptionService.encryptData(email);
             String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
             String errMsg;
@@ -91,7 +92,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
             Map<String, Object> assessmentHierarchy = new HashMap<>();
             Map<String, Object> existingAssessmentData = new HashMap<>();
 
-            errMsg = validateSubmitAssessmentRequest(submitRequest, email, hierarchySectionList,
+            errMsg = validateSubmitAssessmentRequest(submitRequest, email, contextId, hierarchySectionList,
                     sectionListFromSubmitRequest, assessmentHierarchy, existingAssessmentData, editMode);
 
             if (StringUtils.isNotBlank(errMsg)) {
@@ -191,7 +192,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
         return outgoingResponse;
     }
 
-    private String validateSubmitAssessmentRequest(Map<String, Object> submitRequest, String email,
+    private String validateSubmitAssessmentRequest(Map<String, Object> submitRequest, String email,String contextId,
                                                    List<Map<String, Object>> hierarchySectionList, List<Map<String, Object>> sectionListFromSubmitRequest,
                                                    Map<String, Object> assessmentHierarchy, Map<String, Object> existingAssessmentData, boolean editMode) throws Exception {
 
@@ -211,7 +212,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
             return "";
 
         List<Map<String, Object>> existingDataList = assessmentUtilService.readUserSubmittedAssessmentRecords(
-                email, (String) submitRequest.get(Constants.IDENTIFIER));
+                email, (String) submitRequest.get(Constants.IDENTIFIER), contextId);
         if (existingDataList.isEmpty()) {
             return Constants.USER_ASSESSMENT_DATA_NOT_PRESENT;
         } else {

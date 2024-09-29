@@ -14,6 +14,7 @@ public class Constants {
 	public static final String SUCCESSFUL = "Successful";
 	public static final String FAILED = "Failed";
 	public static final String STATUS = "status";
+	public static final String PASS_STATUS = "pass_status";
 	public static final String RESULT = "result";
 	public static final String OK = "OK";
 	public static final String FETCH_RESULT_CONSTANT = ".fetchResult:";
@@ -199,6 +200,7 @@ public class Constants {
 	public static final String RECIPIENT_NAME = "recipientName";
 	public static final String COURSE_NAME = "courseName";
 	public static final String COURSE_POSTER_IMAGE ="coursePosterImage";
+	public static final String COURSE_ASSESSMENT = "Course Assessment";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");

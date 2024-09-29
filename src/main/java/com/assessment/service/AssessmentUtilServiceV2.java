@@ -18,7 +18,7 @@ public interface AssessmentUtilServiceV2 {
 
 	public Map<String, Object> readAssessmentHierarchyFromCache(String assessmentIdentifier,boolean editMode);
 
-	public List<Map<String, Object>> readUserSubmittedAssessmentRecords(String email, String assessmentId);
+	public List<Map<String, Object>> readUserSubmittedAssessmentRecords(String email, String assessmentId, String contextId);
 
 	public Map<String, Object> readQListfromCache(List<String> questionIds, String assessmentIdentifier,boolean editMode) throws IOException;
 

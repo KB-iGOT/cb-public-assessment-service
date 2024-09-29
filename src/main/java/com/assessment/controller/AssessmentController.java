@@ -35,10 +35,9 @@ public class AssessmentController {
     }
 
     @PostMapping("/v1/public/assessment/question/list")
-    public ResponseEntity<SBApiResponse> readQuestionListV4(@Valid @RequestBody Map<String, Object> requestBody,
-                                                @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
+    public ResponseEntity<SBApiResponse> readQuestionListV4(@Valid @RequestBody Map<String, Object> requestBody, @RequestParam(name = "editMode", required = false) String editMode) {
         Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
-        SBApiResponse response = assessmentService.readQuestionList(requestBody, email, edit);
+        SBApiResponse response = assessmentService.readQuestionList(requestBody, edit);
         return new ResponseEntity<>(response, response.getResponseCode());
     }
 
@@ -47,18 +46,16 @@ public class AssessmentController {
     // Async capability and not using Redis
     // =======================
     @PostMapping("/v4/user/assessment/submit")
-    public ResponseEntity<SBApiResponse> submitUserAssessmentV4(@Valid @RequestBody Map<String, Object> requestBody,
-                                                    @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
+    public ResponseEntity<SBApiResponse> submitUserAssessmentV4(@Valid @RequestBody Map<String, Object> requestBody, @RequestParam(name = "editMode", required = false) String editMode) {
         Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
-        SBApiResponse submitResponse = assessmentServiceV4.submitAssessmentAsync(requestBody, email, edit);
+        SBApiResponse submitResponse = assessmentServiceV4.submitAssessmentAsync(requestBody, edit);
         return new ResponseEntity<>(submitResponse, submitResponse.getResponseCode());
     }
 
     @PostMapping("/v5/user/assessment/submit")
-    public ResponseEntity<SBApiResponse> submitUserAssessmentV5(@Valid @RequestBody Map<String, Object> requestBody,
-                                                                @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
+    public ResponseEntity<SBApiResponse> submitUserAssessmentV5(@Valid @RequestBody Map<String, Object> requestBody, @RequestParam(name = "editMode", required = false) String editMode) {
         Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
-        SBApiResponse submitResponse = assessmentServiceV5.submitAssessmentAsync(requestBody, email, edit);
+        SBApiResponse submitResponse = assessmentServiceV5.submitAssessmentAsync(requestBody, edit);
         return new ResponseEntity<>(submitResponse, submitResponse.getResponseCode());
     }
 
@@ -70,10 +67,9 @@ public class AssessmentController {
     }
 
     @PostMapping("/v5/public/assessment/question/list")
-    public ResponseEntity<SBApiResponse> readQuestionListV5(@Valid @RequestBody Map<String, Object> requestBody,
-                                                            @RequestHeader(Constants.EMAIL) String email, @RequestParam(name = "editMode", required = false) String editMode) {
+    public ResponseEntity<SBApiResponse> readQuestionListV5(@Valid @RequestBody Map<String, Object> requestBody, @RequestParam(name = "editMode", required = false) String editMode) {
         Boolean edit = org.apache.commons.lang.StringUtils.isEmpty(editMode) ? false : Boolean.parseBoolean(editMode);
-        SBApiResponse response = assessmentServiceV5.readQuestionList(requestBody, email, edit);
+        SBApiResponse response = assessmentServiceV5.readQuestionList(requestBody, edit);
         return new ResponseEntity<>(response, response.getResponseCode());
     }
 

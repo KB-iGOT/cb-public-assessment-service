@@ -78,6 +78,7 @@ public class AssessmentRepositoryImpl implements AssessmentRepository {
         if (MapUtils.isNotEmpty(saveSubmitAssessmentRequest)) {
             fieldsToBeUpdated.put("savepointsubmitreq", new Gson().toJson(saveSubmitAssessmentRequest));
         }
+        fieldsToBeUpdated.put(Constants.PASS_STATUS, submitAssessmentResponse.getOrDefault(Constants.PASS, false));
         cassandraOperation.updateRecord(Constants.KEYSPACE_SUNBIRD,  serverProperties.getPublicUserAssessmentData(),
                 fieldsToBeUpdated, compositeKeys);
         return true;

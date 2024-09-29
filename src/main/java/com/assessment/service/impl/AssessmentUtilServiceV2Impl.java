@@ -374,10 +374,11 @@ public class AssessmentUtilServiceV2Impl implements AssessmentUtilServiceV2 {
 		return MapUtils.EMPTY_MAP;
 	}
 
-	public List<Map<String, Object>> readUserSubmittedAssessmentRecords(String email, String assessmentId) {
+	public List<Map<String, Object>> readUserSubmittedAssessmentRecords(String email, String assessmentId, String contextId) {
 		Map<String, Object> propertyMap = new HashMap<String, Object>();
 		propertyMap.put(Constants.USER_ID, email);
 		propertyMap.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
+		propertyMap.put(Constants.CONTEXT_ID, contextId);
 		return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
 				Constants.SUNBIRD_KEY_SPACE_NAME, serverProperties.getPublicUserAssessmentData(),
 				propertyMap, null);

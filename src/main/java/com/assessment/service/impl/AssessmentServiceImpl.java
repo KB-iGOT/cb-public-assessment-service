@@ -92,7 +92,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                 return response;
             }
 
-            List<Map<String, Object>> existingDataList = assessmentUtilService.readUserSubmittedAssessmentRecords(encryptedEmail, assessmentIdentifier);
+            List<Map<String, Object>> existingDataList = assessmentUtilService.readUserSubmittedAssessmentRecords(encryptedEmail, assessmentIdentifier, contextId);
             Timestamp assessmentStartTime = new Timestamp(new java.util.Date().getTime());
             if (existingDataList.isEmpty()) {
                 logger.info("Assessment read first time for user.");
@@ -221,21 +221,23 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
 
     @Override
-    public SBApiResponse readQuestionList(Map<String, Object> requestBody, String email, boolean editMode) {
+    public SBApiResponse readQuestionList(Map<String, Object> requestBody, boolean editMode) {
         SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_QUESTIONS_LIST);
         String errMsg;
         Map<String, String> result = new HashMap<>();
         try {
             List<String> identifierList = new ArrayList<>();
             List<Object> questionList = new ArrayList<>();
-            result = validateQuestionListAPI(requestBody, email, identifierList, editMode);
+            String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
+            String email = (String) requestBody.get(Constants.EMAIL);
+            result = validateQuestionListAPI(requestBody, email, contextId, identifierList, editMode);
             errMsg = result.get(Constants.ERROR_MESSAGE);
             if (StringUtils.isNotBlank(errMsg)) {
                 updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
                 return response;
             }
 
-            String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+            String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
             Map<String, Object> questionsMap = assessmentUtilService.readQListfromCache(identifierList, assessmentIdFromRequest, editMode);
             for (String questionId : identifierList) {
                 questionList.add(assessmentUtilService.filterQuestionMapDetail((Map<String, Object>) questionsMap.get(questionId),
@@ -254,12 +256,12 @@ public class AssessmentServiceImpl implements AssessmentService {
         return response;
     }
 
-    private Map<String, String> validateQuestionListAPI(Map<String, Object> requestBody, String email,
+    private Map<String, String> validateQuestionListAPI(Map<String, Object> requestBody, String email, String contextId,
                                                         List<String> identifierList, boolean editMode) throws IOException {
         Map<String, String> result = new HashMap<>();
 
         email = encryptionService.encryptData(email);
-        String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+        String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
         if (StringUtils.isBlank(assessmentIdFromRequest)) {
             result.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_ID_KEY_IS_NOT_PRESENT_IS_EMPTY);
             return result;
@@ -288,7 +290,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         Map<String, Object> userAssessmentAllDetail = new HashMap<String, Object>();
 
         List<Map<String, Object>> existingDataList = assessmentUtilService.readUserSubmittedAssessmentRecords(
-                email, assessmentIdFromRequest);
+                email, assessmentIdFromRequest, contextId);
         String questionSetFromAssessmentString = (!existingDataList.isEmpty())
                 ? (String) existingDataList.get(0).get(Constants.ASSESSMENT_READ_RESPONSE_KEY)
                 : "";

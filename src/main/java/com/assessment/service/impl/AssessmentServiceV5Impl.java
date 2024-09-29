@@ -84,21 +84,21 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
      * Submits an assessment asynchronously.
      *
      * @param submitRequest     The assessment data to be submitted.
-     * @param email    The email of the user submitting the assessment.
      * @param editMode Whether the assessment is being submitted in edit mode.
      * @return The response from the assessment submission.
      */
-    public SBApiResponse submitAssessmentAsync(Map<String, Object> submitRequest, String email, boolean editMode) {
+    public SBApiResponse submitAssessmentAsync(Map<String, Object> submitRequest, boolean editMode) {
         logger.info("AssessmentServicev5Impl::submitAssessmentAsync.. started");
         SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_SUBMIT_ASSESSMENT);
         long assessmentCompletionTime = Calendar.getInstance().getTime().getTime();
         try {
             // Step-1 fetch userid
+            String email = (String) submitRequest.get(Constants.EMAIL);
             if (!ProjectUtil.validateEmailPattern(email)) {
                 updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
-            String contextId = (String) submitRequest.get(Constants.COURSE_ID);
+            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
             email = encryptionService.encryptData(email);
             String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
             String errMsg;
@@ -107,14 +107,14 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             Map<String, Object> assessmentHierarchy = new HashMap<>();
             Map<String, Object> existingAssessmentData = new HashMap<>();
             //Confirm whether the submitted request sections and questions match.
-            errMsg = validateSubmitAssessmentRequest(submitRequest, email, hierarchySectionList,
+            errMsg = validateSubmitAssessmentRequest(submitRequest, email, contextId, hierarchySectionList,
                     sectionListFromSubmitRequest, assessmentHierarchy, existingAssessmentData, editMode);
             if (StringUtils.isNotBlank(errMsg)) {
                 updateErrorDetails(outgoingResponse, errMsg, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
             int maxAssessmentRetakeAttempts = (Integer) assessmentHierarchy.get(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS);
-            int retakeAttemptsConsumed = calculateAssessmentRetakeCount(email, assessmentIdFromRequest);
+            int retakeAttemptsConsumed = calculateAssessmentRetakeCount(email, assessmentIdFromRequest,contextId);
             String assessmentPrimaryCategory = (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY);
             String assessmentType = ((String) assessmentHierarchy.get(Constants.ASSESSMENT_TYPE)).toLowerCase();
             String scoreCutOffType;
@@ -223,9 +223,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         response.setResponseCode(responseCode);
     }
 
-    private int calculateAssessmentRetakeCount(String email, String assessmentId) {
+    private int calculateAssessmentRetakeCount(String email, String assessmentId, String contextId) {
         List<Map<String, Object>> userAssessmentDataList = assessUtilServ.readUserSubmittedAssessmentRecords(email,
-                assessmentId);
+                assessmentId, contextId);
         return (int) userAssessmentDataList.stream()
                 .filter(userData -> userData.containsKey(Constants.SUBMIT_ASSESSMENT_RESPONSE_KEY)
                         && null != userData.get(Constants.SUBMIT_ASSESSMENT_RESPONSE_KEY))
@@ -245,7 +245,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         return new Timestamp(cal.getTime().getTime());
     }
 
-    private String validateSubmitAssessmentRequest(Map<String, Object> submitRequest, String email,
+    private String validateSubmitAssessmentRequest(Map<String, Object> submitRequest, String email, String contextId,
                                                    List<Map<String, Object>> hierarchySectionList, List<Map<String, Object>> sectionListFromSubmitRequest,
                                                    Map<String, Object> assessmentHierarchy, Map<String, Object> existingAssessmentData, boolean editMode) throws Exception {
         if (StringUtils.isEmpty((String) submitRequest.get(Constants.IDENTIFIER))) {
@@ -264,7 +264,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             return "";
 
         List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
-                email, (String) submitRequest.get(Constants.IDENTIFIER));
+                email, (String) submitRequest.get(Constants.IDENTIFIER), contextId);
         if (existingDataList.isEmpty()) {
             return Constants.USER_ASSESSMENT_DATA_NOT_PRESENT;
         } else {
@@ -567,90 +567,38 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT);
         String errMsg = "";
         try {
-            String email = (String) requestBody.get(Constants.EMAIL);
-            String name = (String) requestBody.get(Constants.NAME);
             String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
-            String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
-            if (!ProjectUtil.validateEmailPattern(email)) {
-                updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
-                return outgoingResponse;
-            }
-            email = encryptionService.encryptData(email);
-            logger.info(String.format("ReadAssessment... UserId: %s, AssessmentIdentifier: %s", email, assessmentIdentifier));
-
-            Map<String, Object> assessmentAllDetail = null;
 
             // Step-1 : Read assessment using assessment Id from the Assessment Service
-            if (editMode) {
-                assessmentAllDetail = assessUtilServ.fetchHierarchyFromAssessServc(assessmentIdentifier);
-            } else {
-                assessmentAllDetail = assessUtilServ
-                        .readAssessmentHierarchyFromCache(assessmentIdentifier, editMode);
-            }
-
+            Map<String, Object> assessmentAllDetail = readAssessment(assessmentIdentifier, editMode);
+            //Step-2 : If assessment is empty throw validation error
             if (MapUtils.isEmpty(assessmentAllDetail)) {
                 updateErrorDetails(outgoingResponse, Constants.ASSESSMENT_HIERARCHY_READ_FAILED,
                         HttpStatus.INTERNAL_SERVER_ERROR);
                 return outgoingResponse;
             }
-
-            //Step-2 : If Practice Assessment return without saving
+            //Step-3 : If assessment is practice question set send back the response
             if (Constants.PRACTICE_QUESTION_SET
                     .equalsIgnoreCase((String) assessmentAllDetail.get(Constants.PRIMARY_CATEGORY)) || editMode) {
                 outgoingResponse.getResult().put(Constants.QUESTION_SET, readAssessmentLevelData(assessmentAllDetail));
                 return outgoingResponse;
             }
 
-            // Step-3 : If read user submitted assessment
-            List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
-                    email, assessmentIdentifier);
-            Timestamp assessmentStartTime = new Timestamp(new Date().getTime());
+            //Step-4 : If primary category is course assessment then email validation is done
+            if (assessmentAllDetail.get(Constants.PRIMARY_CATEGORY).equals(Constants.COURSE_ASSESSMENT)) {
+                String email = (String) requestBody.get(Constants.EMAIL);
+                String name = (String) requestBody.get(Constants.NAME);
+                String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
+                logger.info(String.format("ReadAssessment... UserId: %s, AssessmentIdentifier: %s", email, assessmentIdentifier));
 
-            if (existingDataList.isEmpty()) {
-                logger.info("Assessment read first time for user.");
-                // Add Null check for expectedDuration.throw bad questionSet Assessment Exam
-                if (null == assessmentAllDetail.get(Constants.EXPECTED_DURATION)) {
-                    errMsg = Constants.ASSESSMENT_INVALID;
-                } else {
-                    int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
-                    Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
-                            assessmentStartTime, 0);
-                    Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
-                    assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
-                    assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
-                    outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
-                    Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
-                            assessmentIdentifier, assessmentStartTime, assessmentEndTime,
-                            (Map<String, Object>) (outgoingResponse.getResult().get(Constants.QUESTION_SET)),
-                            Constants.NOT_SUBMITTED, name,contextId);
-                    if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
-                        errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
-                    }
+                SBApiResponse errResponse = validateCoursePublicAssessmentPayload(requestBody);
+                if(!ObjectUtils.isEmpty(errResponse)){
+                    return errResponse;
                 }
-            } else {
-                logger.info("Assessment read... user has details... ");
-                Date existingAssessmentEndTime = (Date) (existingDataList.get(0)
-                        .get(Constants.END_TIME));
-                Timestamp existingAssessmentEndTimeTimestamp = new Timestamp(
-                        existingAssessmentEndTime.getTime());
-                if (assessmentStartTime.compareTo(existingAssessmentEndTimeTimestamp) < 0
-                        && Constants.NOT_SUBMITTED.equalsIgnoreCase((String) existingDataList.get(0).get(Constants.STATUS))) {
-                    String questionSetFromAssessmentString = (String) existingDataList.get(0)
-                            .get(Constants.ASSESSMENT_READ_RESPONSE_KEY);
-                    Map<String, Object> questionSetFromAssessment = new Gson().fromJson(
-                            questionSetFromAssessmentString, new TypeToken<HashMap<String, Object>>() {
-                            }.getType());
-                    questionSetFromAssessment.put(Constants.START_TIME, assessmentStartTime.getTime());
-                    questionSetFromAssessment.put(Constants.END_TIME,
-                            existingAssessmentEndTimeTimestamp.getTime());
-                    outgoingResponse.getResult().put(Constants.QUESTION_SET, questionSetFromAssessment);
-                } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED)) {
-                    outgoingResponse.getResult().put(Constants.RESPONSE, "User has already submitted the assessment");
-                    outgoingResponse.getParams().setStatus(Constants.SUCCESS);
-                    outgoingResponse.setResponseCode(HttpStatus.OK);
-                    return outgoingResponse;
-                }
+                return handleAssessmentReadForPublicAssessments(email, name, contextId, assessmentIdentifier, assessmentAllDetail);
             }
+
+
         } catch (Exception e) {
             errMsg = String.format("Error while reading assessment. Exception: %s", e.getMessage());
             logger.error(errMsg, e);
@@ -776,111 +724,82 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
      * Reads a list of questions.
      *
      * @param requestBody The request body containing the question list parameters.
-     * @param email       The email of the user.
      * @param editMode        Whether the question list is being read in edit mode.
      * @return The response from the question list read.
      */
     @Override
-    public SBApiResponse readQuestionList(@Valid Map<String, Object> requestBody, String email, Boolean editMode) {
+    public SBApiResponse readQuestionList(@Valid Map<String, Object> requestBody, Boolean editMode) {
         SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_QUESTIONS_LIST);
         String errMsg;
         Map<String, String> result = new HashMap<>();
         try {
+
             List<String> identifierList = new ArrayList<>();
             List<Object> questionList = new ArrayList<>();
-            result = validateQuestionListAPI(requestBody, email, identifierList, editMode);
-            errMsg = result.get(Constants.ERROR_MESSAGE);
-            if (StringUtils.isNotBlank(errMsg)) {
-                updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+            String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
+            String email = (String) requestBody.get(Constants.EMAIL);
+            String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
+
+            //Step-1 : Validation for QuestionList requestBody
+            SBApiResponse errResponse = validateQuestionListAPI(requestBody, editMode);
+            if(!ObjectUtils.isEmpty(errResponse)){
+                return errResponse;
+            }
+
+            Map<String, Object> userAssessmentAllDetail = new HashMap<String, Object>();
+            String encryptedEmail = encryptionService.encryptData(email);
+            identifierList.addAll(getQuestionIdList(requestBody));
+
+            String questionSetFromAssessmentString = fetchAssessmentMetaDataResponse(encryptedEmail, assessmentIdFromRequest, contextId);
+            if (StringUtils.isNotBlank(questionSetFromAssessmentString)) {
+                userAssessmentAllDetail.putAll(mapper.readValue(questionSetFromAssessmentString,
+                        new TypeReference<Map<String, Object>>() {
+                        }));
+            } else {
+                response.put(Constants.ERROR_MESSAGE, Constants.USER_ASSESSMENT_DATA_NOT_PRESENT);
                 return response;
             }
 
-            String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+            if (!MapUtils.isEmpty(userAssessmentAllDetail)) {
+                result.put(Constants.PRIMARY_CATEGORY, (String) userAssessmentAllDetail.get(Constants.PRIMARY_CATEGORY));
+                List<String> questionsFromAssessment = new ArrayList<>();
+                List<Map<String, Object>> sections = (List<Map<String, Object>>) userAssessmentAllDetail
+                        .get(Constants.CHILDREN);
+                for (Map<String, Object> section : sections) {
+                    // Out of the list of questions received in the payload, checking if the request
+                    // has only those ids which are a part of the user's latest assessment
+                    // Fetching all the remaining questions details from the Redis
+                    questionsFromAssessment.addAll((List<String>) section.get(Constants.CHILD_NODES));
+                }
+                if (!validateQuestionListRequest(identifierList, questionsFromAssessment)) {
+                    response.put(Constants.ERROR_MESSAGE, Constants.THE_QUESTIONS_IDS_PROVIDED_DONT_MATCH);
+                    return response;
+                }
+            } else {
+                response.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_ID_INVALID);
+                return response;
+            }
+
             Map<String, Object> questionsMap = assessUtilServ.readQListfromCache(identifierList, assessmentIdFromRequest, editMode);
             for (String questionId : identifierList) {
                 questionList.add(assessUtilServ.filterQuestionMapDetailV2((Map<String, Object>) questionsMap.get(questionId),
                         result.get(Constants.PRIMARY_CATEGORY)));
             }
-            if (errMsg.isEmpty() && identifierList.size() == questionList.size()) {
+            if (identifierList.size() == questionList.size()) {
                 response.getResult().put(Constants.QUESTIONS, questionList);
             }
         } catch (Exception e) {
             errMsg = String.format("Failed to fetch the question list. Exception: %s", e.getMessage());
             logger.error(errMsg, e);
-        }
-        if (StringUtils.isNotBlank(errMsg)) {
-            updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+            response.put(Constants.ERROR_MESSAGE, errMsg);
+            return response;
         }
         return response;
     }
 
-    private Map<String, String> validateQuestionListAPI(Map<String, Object> requestBody, String email,
-                                                        List<String> identifierList, boolean editMode) throws IOException {
-        Map<String, String> result = new HashMap<>();
-        email = encryptionService.encryptData(email);
-        String assessmentIdFromRequest = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
-        if (StringUtils.isBlank(assessmentIdFromRequest)) {
-            result.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_ID_KEY_IS_NOT_PRESENT_IS_EMPTY);
-            return result;
-        }
-        identifierList.addAll(getQuestionIdList(requestBody));
-        if (identifierList.isEmpty()) {
-            result.put(Constants.ERROR_MESSAGE, Constants.IDENTIFIER_LIST_IS_EMPTY);
-            return result;
-        }
+    private SBApiResponse validateQuestionListAPI(Map<String, Object> requestBody, boolean editMode) throws IOException {
+        return validateQuestionListPayload(requestBody,editMode);
 
-        Map<String, Object> assessmentAllDetail = assessUtilServ
-                .readAssessmentHierarchyFromCache(assessmentIdFromRequest, editMode);
-
-        if (MapUtils.isEmpty(assessmentAllDetail)) {
-            result.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_HIERARCHY_READ_FAILED);
-            return result;
-        }
-        String primaryCategory = (String) assessmentAllDetail.get(Constants.PRIMARY_CATEGORY);
-        if (Constants.PRACTICE_QUESTION_SET
-                .equalsIgnoreCase(primaryCategory) || editMode) {
-            result.put(Constants.PRIMARY_CATEGORY, primaryCategory);
-            result.put(Constants.ERROR_MESSAGE, StringUtils.EMPTY);
-            return result;
-        }
-
-        Map<String, Object> userAssessmentAllDetail = new HashMap<String, Object>();
-
-        List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
-                email, assessmentIdFromRequest);
-        String questionSetFromAssessmentString = (!existingDataList.isEmpty())
-                ? (String) existingDataList.get(0).get(Constants.ASSESSMENT_READ_RESPONSE_KEY)
-                : "";
-        if (StringUtils.isNotBlank(questionSetFromAssessmentString)) {
-            userAssessmentAllDetail.putAll(mapper.readValue(questionSetFromAssessmentString,
-                    new TypeReference<Map<String, Object>>() {
-                    }));
-        } else {
-            result.put(Constants.ERROR_MESSAGE, Constants.USER_ASSESSMENT_DATA_NOT_PRESENT);
-            return result;
-        }
-
-        if (!MapUtils.isEmpty(userAssessmentAllDetail)) {
-            result.put(Constants.PRIMARY_CATEGORY, (String) userAssessmentAllDetail.get(Constants.PRIMARY_CATEGORY));
-            List<String> questionsFromAssessment = new ArrayList<>();
-            List<Map<String, Object>> sections = (List<Map<String, Object>>) userAssessmentAllDetail
-                    .get(Constants.CHILDREN);
-            for (Map<String, Object> section : sections) {
-                // Out of the list of questions received in the payload, checking if the request
-                // has only those ids which are a part of the user's latest assessment
-                // Fetching all the remaining questions details from the Redis
-                questionsFromAssessment.addAll((List<String>) section.get(Constants.CHILD_NODES));
-            }
-            if (validateQuestionListRequest(identifierList, questionsFromAssessment)) {
-                result.put(Constants.ERROR_MESSAGE, StringUtils.EMPTY);
-            } else {
-                result.put(Constants.ERROR_MESSAGE, Constants.THE_QUESTIONS_IDS_PROVIDED_DONT_MATCH);
-            }
-            return result;
-        } else {
-            result.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_ID_INVALID);
-            return result;
-        }
     }
 
     private List<String> getQuestionIdList(Map<String, Object> questionListRequest) {
@@ -924,9 +843,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
 
             Map<String, Object> requestBody = (Map<String, Object>) request.get(Constants.REQUEST);
             String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
-
+            String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
             List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
-                    email, assessmentIdentifier);
+                    email, assessmentIdentifier, contextId);
 
             if (existingDataList.isEmpty()) {
                 updateErrorDetails(response, Constants.USER_ASSESSMENT_DATA_NOT_PRESENT, HttpStatus.BAD_REQUEST);
@@ -967,9 +886,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             missingAttribs.add(Constants.ASSESSMENT_ID_KEY);
         }
 
-        if (!requestBody.containsKey(Constants.COURSE_ID)
-                || StringUtils.isBlank((String) requestBody.get(Constants.COURSE_ID))) {
-            missingAttribs.add(Constants.COURSE_ID);
+        if (!requestBody.containsKey(Constants.CONTEXT_ID)
+                || StringUtils.isBlank((String) requestBody.get(Constants.CONTEXT_ID))) {
+            missingAttribs.add(Constants.CONTEXT_ID);
         }
 
         if (!missingAttribs.isEmpty()) {
@@ -978,6 +897,146 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         }
 
         return errMsg;
+    }
+
+    private SBApiResponse handleAssessmentReadForPublicAssessments(String email, String name, String contextId, String assessmentIdentifier, Map<String, Object> assessmentAllDetail){
+
+        SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT);
+        String errMsg = "";
+
+        //step-4.2 : encryption of the email
+        email = encryptionService.encryptData(email);
+        // Step-4.3 : check for user assessment record from cassandra
+        List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
+                email, assessmentIdentifier, contextId);
+        Timestamp assessmentStartTime = new Timestamp(new Date().getTime());
+
+        //Step-4.4 : If user assessment does not exist, making a fresh entry in cassandra
+        if (existingDataList.isEmpty()) {
+            logger.info("Assessment read first time for user.");
+            // Add Null check for expectedDuration.throw bad questionSet Assessment Exam
+            if (null == assessmentAllDetail.get(Constants.EXPECTED_DURATION)) {
+                errMsg = Constants.ASSESSMENT_INVALID;
+                updateErrorDetails(outgoingResponse, errMsg,
+                        HttpStatus.INTERNAL_SERVER_ERROR);
+                return outgoingResponse;
+            } else {
+                int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
+                Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
+                        assessmentStartTime, 0);
+                Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
+                assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
+                assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
+                outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
+                Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
+                        assessmentIdentifier, assessmentStartTime, assessmentEndTime,
+                        (Map<String, Object>) (outgoingResponse.getResult().get(Constants.QUESTION_SET)),
+                        Constants.NOT_SUBMITTED, name, contextId);
+                if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
+                    errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
+                    updateErrorDetails(outgoingResponse, errMsg,
+                            HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+            }
+        } else {
+            logger.info("Assessment read... user has details... ");
+            Date existingAssessmentEndTime = (Date) (existingDataList.get(0)
+                    .get(Constants.END_TIME));
+            Timestamp existingAssessmentEndTimeTimestamp = new Timestamp(
+                    existingAssessmentEndTime.getTime());
+
+            if (assessmentStartTime.compareTo(existingAssessmentEndTimeTimestamp) < 0
+                    && Constants.NOT_SUBMITTED.equalsIgnoreCase((String) existingDataList.get(0).get(Constants.STATUS))) {
+                String questionSetFromAssessmentString = (String) existingDataList.get(0)
+                        .get(Constants.ASSESSMENT_READ_RESPONSE_KEY);
+                Map<String, Object> questionSetFromAssessment = new Gson().fromJson(
+                        questionSetFromAssessmentString, new TypeToken<HashMap<String, Object>>() {
+                        }.getType());
+                questionSetFromAssessment.put(Constants.START_TIME, assessmentStartTime.getTime());
+                questionSetFromAssessment.put(Constants.END_TIME,
+                        existingAssessmentEndTimeTimestamp.getTime());
+                outgoingResponse.getResult().put(Constants.QUESTION_SET, questionSetFromAssessment);
+            } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED)) {
+                outgoingResponse.getResult().put(Constants.RESPONSE, "User has already submitted the assessment");
+                outgoingResponse.getParams().setStatus(Constants.SUCCESS);
+                outgoingResponse.setResponseCode(HttpStatus.OK);
+                return outgoingResponse;
+            }
+        }
+
+        return outgoingResponse;
+    }
+
+    private SBApiResponse validateCoursePublicAssessmentPayload(Map<String, Object> requestBody) {
+
+        SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_READ_ASSESSMENT);
+        String email = (String) requestBody.get(Constants.EMAIL);
+        String name = (String) requestBody.get(Constants.NAME);
+        String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
+        String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
+
+        if (StringUtils.isEmpty(email) || StringUtils.isEmpty(name) || StringUtils.isEmpty(assessmentIdentifier) || StringUtils.isEmpty(contextId)) {
+            updateErrorDetails(outgoingResponse, Constants.INVALID_REQUEST, HttpStatus.BAD_REQUEST);
+            return outgoingResponse;
+        }
+        //Step-4.1 email validation step
+        if (!ProjectUtil.validateEmailPattern(email)) {
+            updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
+            return outgoingResponse;
+        }
+        return null;
+    }
+
+    private Map<String, Object> readAssessment(String assessmentIdentifier, boolean editMode) {
+        if (editMode) {
+            return assessUtilServ.fetchHierarchyFromAssessServc(assessmentIdentifier);
+        }
+        return assessUtilServ
+                .readAssessmentHierarchyFromCache(assessmentIdentifier, editMode);
+
+    }
+
+    private SBApiResponse validateQuestionListPayload(Map<String, Object> requestBody, boolean editMode){
+
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_QUESTIONS_LIST);
+
+        String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
+        if (StringUtils.isBlank(assessmentIdentifier)) {
+            response.put(Constants.ERROR_MESSAGE, Constants.ASSESSMENT_ID_KEY_IS_NOT_PRESENT_IS_EMPTY);
+            return response;
+        }
+        // Step-1 : Read assessment using assessment Id from the Assessment Service
+        Map<String, Object> assessmentAllDetail = readAssessment(assessmentIdentifier, editMode);
+        //Step-2 : If assessment is empty throw validation error
+        if (MapUtils.isEmpty(assessmentAllDetail)) {
+            updateErrorDetails(response, Constants.ASSESSMENT_HIERARCHY_READ_FAILED,
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+            return response;
+        }
+        String primaryCategory = (String) assessmentAllDetail.get(Constants.PRIMARY_CATEGORY);
+        if (Constants.PRACTICE_QUESTION_SET
+                .equalsIgnoreCase(primaryCategory) || editMode) {
+            response.put(Constants.PRIMARY_CATEGORY, primaryCategory);
+            response.put(Constants.ERROR_MESSAGE, StringUtils.EMPTY);
+            return response;
+        }
+
+        List<String> identifierList = new ArrayList<>();
+        identifierList.addAll(getQuestionIdList(requestBody));
+        if (identifierList.isEmpty()) {
+            response.put(Constants.ERROR_MESSAGE, Constants.IDENTIFIER_LIST_IS_EMPTY);
+            return response;
+        }
+        return null;
+    }
+
+    private String fetchAssessmentMetaDataResponse(String encryptedEmail, String assessmentIdFromRequest, String contextId) {
+        List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
+                encryptedEmail, assessmentIdFromRequest, contextId);
+        return (!existingDataList.isEmpty())
+                ? (String) existingDataList.get(0).get(Constants.ASSESSMENT_READ_RESPONSE_KEY)
+                : "";
+
     }
 
 }
