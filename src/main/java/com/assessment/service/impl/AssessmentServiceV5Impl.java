@@ -842,7 +842,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             }
 
             Map<String, Object> requestBody = (Map<String, Object>) request.get(Constants.REQUEST);
-            String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_ID_KEY);
+            String assessmentIdentifier = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
             String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
             List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
                     email, assessmentIdentifier, contextId);
@@ -881,9 +881,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             return Constants.INVALID_REQUEST;
         }
         List<String> missingAttribs = new ArrayList<String>();
-        if (!requestBody.containsKey(Constants.ASSESSMENT_ID_KEY)
-                || StringUtils.isBlank((String) requestBody.get(Constants.ASSESSMENT_ID_KEY))) {
-            missingAttribs.add(Constants.ASSESSMENT_ID_KEY);
+        if (!requestBody.containsKey(Constants.ASSESSMENT_IDENTIFIER)
+                || StringUtils.isBlank((String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER))) {
+            missingAttribs.add(Constants.ASSESSMENT_IDENTIFIER);
         }
 
         if (!requestBody.containsKey(Constants.CONTEXT_ID)
