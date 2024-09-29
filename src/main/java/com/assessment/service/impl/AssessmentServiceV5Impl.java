@@ -22,7 +22,6 @@ import com.google.gson.reflect.TypeToken;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
-import org.mortbay.util.ajax.JSON;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +38,6 @@ import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static com.assessment.util.ProjectUtil.updateErrorDetails;
 import static java.util.stream.Collectors.toList;
 
 @Service
@@ -189,7 +187,8 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                     Date assessmentStart = (Date) existingAssessmentData.get(Constants.START_TIME);
                     assessmentStartTime = assessmentStart.getTime();
                 }
-                Map<String, Object> result = calculateSectionFinalResults(sectionLevelsResults, assessmentStartTime, assessmentCompletionTime, maxAssessmentRetakeAttempts, retakeAttemptsConsumed);
+                int minimumPassPercentage=(int) assessmentHierarchy.get(Constants.MINIMUM_PASS_PERCENTAGE);
+                Map<String, Object> result = calculateSectionFinalResults(sectionLevelsResults, assessmentStartTime, assessmentCompletionTime, maxAssessmentRetakeAttempts, retakeAttemptsConsumed,minimumPassPercentage);
                 outgoingResponse.getResult().putAll(result);
                 outgoingResponse.getParams().setStatus(Constants.SUCCESS);
                 outgoingResponse.setResponseCode(HttpStatus.OK);
@@ -453,7 +452,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         }
     }
 
-    private Map<String, Object> calculateSectionFinalResults(List<Map<String, Object>> sectionLevelResults, long assessmentStartTime, long assessmentCompletionTime, int maxAssessmentRetakeAttempts, int retakeAttemptsConsumed) {
+    private Map<String, Object> calculateSectionFinalResults(List<Map<String, Object>> sectionLevelResults, long assessmentStartTime, long assessmentCompletionTime, int maxAssessmentRetakeAttempts, int retakeAttemptsConsumed, int overallPassPercentage) {
         Map<String, Object> res = new HashMap<>();
         Double result;
         Integer correct = 0;
@@ -491,11 +490,11 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             res.put(Constants.BLANK, blank);
             res.put(Constants.CORRECT, correct);
             res.put(Constants.INCORRECT, inCorrect);
-            res.put(Constants.PASS, (pass == sectionLevelResults.size()));
             res.put(Constants.TIME_TAKEN_FOR_ASSESSMENT, assessmentCompletionTime - assessmentStartTime);
             res.put(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS, maxAssessmentRetakeAttempts);
             res.put(Constants.RETAKE_ATTEMPT_CONSUMED, retakeAttemptsConsumed);
             double totalPercentage = (totalSectionMarks / (double) totalMarks) * 100;
+            res.put(Constants.PASS, totalPercentage >= overallPassPercentage);
             res.put(Constants.TOTAL_PERCENTAGE, totalPercentage);
             res.put(Constants.TOTAL_SECTION_MARKS, totalSectionMarks);
             res.put(Constants.TOTAL_MARKS, totalMarks);
@@ -921,17 +920,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                         HttpStatus.INTERNAL_SERVER_ERROR);
                 return outgoingResponse;
             } else {
-                int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
-                Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
-                        assessmentStartTime, 0);
-                Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
-                assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
-                assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
-                outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
-                Boolean isAssessmentUpdatedToDB = assessmentRepository.addUserAssesmentDataToDB(email,
-                        assessmentIdentifier, assessmentStartTime, assessmentEndTime,
-                        (Map<String, Object>) (outgoingResponse.getResult().get(Constants.QUESTION_SET)),
-                        Constants.NOT_SUBMITTED, name, contextId);
+                Boolean isAssessmentUpdatedToDB = addAssessmentDataToDB(email, name, contextId, assessmentIdentifier, assessmentAllDetail, assessmentStartTime, outgoingResponse);
                 if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
                     errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
                     updateErrorDetails(outgoingResponse, errMsg,
@@ -956,7 +945,14 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 questionSetFromAssessment.put(Constants.END_TIME,
                         existingAssessmentEndTimeTimestamp.getTime());
                 outgoingResponse.getResult().put(Constants.QUESTION_SET, questionSetFromAssessment);
-            } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED)) {
+            } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED) && !(Boolean) existingDataList.get(0).get(Constants.PASS_STATUS)) {
+                Boolean isAssessmentUpdatedToDB = addAssessmentDataToDB(email, name, contextId, assessmentIdentifier, assessmentAllDetail, assessmentStartTime, outgoingResponse);
+                if (Boolean.FALSE.equals(isAssessmentUpdatedToDB)) {
+                    errMsg = Constants.ASSESSMENT_DATA_START_TIME_NOT_UPDATED;
+                    updateErrorDetails(outgoingResponse, errMsg,
+                            HttpStatus.INTERNAL_SERVER_ERROR);
+                }
+            } else if (((String) existingDataList.get(0).get(Constants.STATUS)).equalsIgnoreCase(Constants.SUBMITTED)  && (Boolean) existingDataList.get(0).get(Constants.PASS_STATUS)) {
                 outgoingResponse.getResult().put(Constants.RESPONSE, "User has already submitted the assessment");
                 outgoingResponse.getParams().setStatus(Constants.SUCCESS);
                 outgoingResponse.setResponseCode(HttpStatus.OK);
@@ -965,6 +961,20 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         }
 
         return outgoingResponse;
+    }
+
+    private Boolean addAssessmentDataToDB(String email, String name, String contextId, String assessmentIdentifier, Map<String, Object> assessmentAllDetail, Timestamp assessmentStartTime, SBApiResponse outgoingResponse) {
+        int expectedDuration = (Integer) assessmentAllDetail.get(Constants.EXPECTED_DURATION);
+        Timestamp assessmentEndTime = calculateAssessmentSubmitTime(expectedDuration,
+                assessmentStartTime, 0);
+        Map<String, Object> assessmentData = readAssessmentLevelData(assessmentAllDetail);
+        assessmentData.put(Constants.START_TIME, assessmentStartTime.getTime());
+        assessmentData.put(Constants.END_TIME, assessmentEndTime.getTime());
+        outgoingResponse.getResult().put(Constants.QUESTION_SET, assessmentData);
+        return assessmentRepository.addUserAssesmentDataToDB(email,
+                assessmentIdentifier, assessmentStartTime, assessmentEndTime,
+                (Map<String, Object>) (outgoingResponse.getResult().get(Constants.QUESTION_SET)),
+                Constants.NOT_SUBMITTED, name, contextId);
     }
 
     private SBApiResponse validateCoursePublicAssessmentPayload(Map<String, Object> requestBody) {
