@@ -111,7 +111,7 @@ public class ServerProperties {
 	@Value("${kafka.topic.certificate.request}")
 	private String kafkaTopicCertificateRequest;
 
-	@Value("{public.assessment.completion.template}")
+	@Value("${public.assessment.completion.template}")
 	private String publicAssessmentCompletionTemplate;
 
 	@Value("${public.access.url}")
