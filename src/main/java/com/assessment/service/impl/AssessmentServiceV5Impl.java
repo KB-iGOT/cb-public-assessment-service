@@ -917,9 +917,6 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             errMsg = "One or more mandatory fields are missing in Request. Mandatory fields are : "
                     + missingAttribs.toString();
         }
-        Map<String, Object> assessmentHierarchy = readAssessment((String) request.get(Constants.ASSESSMENT_IDENTIFIER), false);
-        // validate the hierachy
-
         return errMsg;
     }
 
