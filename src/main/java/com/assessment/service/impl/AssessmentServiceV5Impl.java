@@ -1132,14 +1132,14 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             mailNotificationDetails.put(Constants.COURSE_NAME, edata.get(Constants.COURSE_NAME));
             mailNotificationDetails.put(Constants.COURSE_POSTER_IMAGE_URL, edata.get(Constants.COURSE_POSTER_IMAGE));
             mailNotificationDetails.put(Constants.SUBJECT,Constants.COURSE_COMPLETION_SUBJECT);
-            sendAssessmentNotification(mailNotificationDetails,serverProperties.getPublicAssessmentCompletionTemplate(),false);
+            sendAssessmentNotification(mailNotificationDetails);
             logger.info("assessment notification sent successfully");
         }catch (Exception e){
             logger.error("failed to send the assessment notification :: " + e);
         }
     }
 
-    private void sendAssessmentNotification(Map<String, Object> mailNotificationDetails,String templateName,boolean isCertificateNotification) {
+    private void sendAssessmentNotification(Map<String, Object> mailNotificationDetails) {
         Map<String, Object> params = new HashMap<>();
         NotificationAsyncRequest notificationRequest = new NotificationAsyncRequest();
         Map<String, Object> action = new HashMap<>();
@@ -1147,10 +1147,8 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         Map<String, Object> usermap = new HashMap<>();
         params.put(Constants.COURSE_NAME, mailNotificationDetails.get(Constants.COURSE_NAME));
         params.put(Constants.COURSE_POSTER_IMAGE_KEY, mailNotificationDetails.get(Constants.COURSE_POSTER_IMAGE_URL));
-        if(isCertificateNotification){
-            params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
-        }
-        Template template = new Template(constructEmailTemplate(templateName, params), templateName, params);
+        //params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
+        Template template = new Template(constructEmailTemplate(serverProperties.getPublicAssessmentCompletionTemplate(), params), serverProperties.getPublicAssessmentCompletionTemplate(), params);
         usermap.put(Constants.ID, "");
         usermap.put(Constants.TYPE, Constants.USER);
         action.put(Constants.TEMPLATE, templ);
@@ -1256,6 +1254,112 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             return error;
         }
         return error;
+    }
+
+    @Override
+    public SBApiResponse assessmentCertificateReissue(Map<String, Object> requestBody) {
+        logger.info("AssessmentServiceV5Impl::CertificateReissue.. started");
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_SUBMIT_ASSESSMENT);
+        String errMsg = "";
+        try {
+            String email = (String) requestBody.get(Constants.EMAIL);
+            String assessmentId = (String) requestBody.get(Constants.ASSESSMENT_IDENTIFIER);
+            String contextId = (String) requestBody.get(Constants.CONTEXT_ID);
+
+            if (StringUtils.isEmpty(email) || StringUtils.isEmpty(assessmentId) || StringUtils.isEmpty(contextId)) {
+                updateErrorDetails(response, Constants.INVALID_REQUEST, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+            if (!ProjectUtil.validateEmailPattern(email)) {
+                updateErrorDetails(response, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+
+            String encryptedEmail = encryptionService.encryptData(email);
+            List<Map<String, Object>> submitedAssessmentDetails = assessmentRepository.fetchUserAssessmentDataFromDB(encryptedEmail, assessmentId);
+            if (CollectionUtils.isEmpty(submitedAssessmentDetails)) {
+                String recipientName = (String) submitedAssessmentDetails.get(0).get(Constants.NAME);
+                Boolean passStatus = (Boolean) submitedAssessmentDetails.get(0).get(Constants.PASS_STATUS);
+
+                if (Boolean.TRUE.equals(passStatus)) {
+                    List<Map<String, Object>> issuedCertificates = (List<Map<String, Object>>) submitedAssessmentDetails.get(0).get(Constants.ISSUED_CERTIFICATE);
+                    String certPublicUrl = (String) submitedAssessmentDetails.get(0).get(Constants.CERT_PUBLIC_URL);
+                    if (!CollectionUtils.isEmpty(issuedCertificates)) {
+                        logger.info("AssessmentServiceV5Impl::raising event to cert pdf generator");
+                        resendMessageToKafkaForCertificate(recipientName, encryptedEmail, contextId, assessmentId);
+                    } else if (!StringUtils.isEmpty(certPublicUrl)) {
+
+                        logger.info("AssessmentServiceV5Impl::raising event to cert post pdf generator");
+                        Map<String, Object> kafkaInputPostPdfGeneration = new HashMap<>();
+                        kafkaInputPostPdfGeneration.put("userid", email);
+                        kafkaInputPostPdfGeneration.put("courseid", contextId);
+                        kafkaInputPostPdfGeneration.put("assessmentid", assessmentId);
+                        producer.push(serverProperties.getPublicAssessmentCertGenerationPostProcessTopic(), kafkaInputPostPdfGeneration);
+                    } else {
+                        logger.info("AssessmentServiceV5Impl::notify user on email");
+                        Map<String, Object> notificationInput = new HashMap<>();
+                        notificationInput.put(Constants.USER_ID, email);
+                        notificationInput.put(Constants.CONTEXT_ID, contextId);
+                        notificationInput.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
+                        producer.push(serverProperties.getSpringKafkaPublicAssessmentNotificationTopicName(), notificationInput);
+
+                    }
+                } else {
+                    errMsg = "User assessment did not pass.";
+                    updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+                    return response;
+                }
+            } else {
+                errMsg = "User assessment data is not available";
+                updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+        } catch (Exception e) {
+            errMsg = "Failed to read user assessment data for certificate reissue.";
+            logger.error("{}Exception: ", errMsg, e);
+            updateErrorDetails(response, errMsg, HttpStatus.BAD_REQUEST);
+            return response;
+        }
+        response.getParams().setStatus(Constants.SUCCESS);
+        response.setResponseCode(HttpStatus.OK);
+        return response;
+    }
+
+    private void resendMessageToKafkaForCertificate(String recipientName, String email, String contextId, String assessmentId) throws IOException {
+
+        try {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+            String completionDate = dateFormat.format(new Date());
+
+            Map<String, Object> propertyMap = new HashMap<>();
+            propertyMap.put(Constants.IDENTIFIER, contextId);
+            List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), propertyMap, null);
+
+            String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
+            Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
+            String courseProvider = (String) contentHierarchyObj.get(Constants.SOURCE);
+            String courseName = (String) contentHierarchyObj.get(Constants.NAME);
+            String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
+
+
+            Resource resource = resourceLoader.getResource("classpath:certificate-kafka-json.json");
+            InputStream inputStream = resource.getInputStream();
+            JsonNode jsonNode = mapper.readTree(inputStream);
+
+            Map<String, Object> certificateRequest = new HashMap<>();
+            certificateRequest.put(Constants.USER_ID, decryptionService.decryptData(email));
+            certificateRequest.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
+            certificateRequest.put(Constants.COURSE_ID, contextId);
+            certificateRequest.put(Constants.COMPLETION_DATE, completionDate);
+            certificateRequest.put(Constants.PROVIDER_NAME, courseProvider);
+            certificateRequest.put(Constants.COURSE_NAME, courseName);
+            certificateRequest.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+            certificateRequest.put(Constants.RECIPIENT_NAME, recipientName);
+            kafkaCertificateProducerService.replacePlaceholders(jsonNode, certificateRequest);
+            producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNode);
+        } catch (Exception e) {
+            logger.error("Failed to send kafka message: ", e);
+        }
     }
 
     @Override

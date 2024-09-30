@@ -117,6 +117,12 @@ public class ServerProperties {
 	@Value("${public.access.url}")
 	private String publicAccessUrl;
 
+	@Value("${spring.kafka.public.assessment.notification.topic.name}")
+	private String springKafkaPublicAssessmentNotificationTopicName;
+
+	@Value("${public.assessment.cert.generation.post.process.topic}")
+	private String publicAssessmentCertGenerationPostProcessTopic;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -381,5 +387,23 @@ public class ServerProperties {
 
 	public void setPublicAccessUrl(String publicAccessUrl) {
 		this.publicAccessUrl = publicAccessUrl;
+	}
+
+
+	public String getSpringKafkaPublicAssessmentNotificationTopicName() {
+		return springKafkaPublicAssessmentNotificationTopicName;
+	}
+
+	public void setSpringKafkaPublicAssessmentNotificationTopicName(String springKafkaPublicAssessmentNotificationTopicName) {
+		this.springKafkaPublicAssessmentNotificationTopicName = springKafkaPublicAssessmentNotificationTopicName;
+	}
+
+	public String getPublicAssessmentCertGenerationPostProcessTopic() {
+		return publicAssessmentCertGenerationPostProcessTopic;
+	}
+
+	public void setPublicAssessmentCertGenerationPostProcessTopic(String publicAssessmentCertGenerationPostProcessTopic) {
+		this.publicAssessmentCertGenerationPostProcessTopic = publicAssessmentCertGenerationPostProcessTopic;
+
 	}
 }

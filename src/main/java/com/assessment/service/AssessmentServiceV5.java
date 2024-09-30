@@ -36,5 +36,7 @@ public interface AssessmentServiceV5 {
 
     void processNotification(Map<String, Object> notificationRequest);
 
+    public SBApiResponse assessmentCertificateReissue( Map<String, Object> requestBody);
+
     void processDownloadNotification(Map<String, Object> notificationRequest);
 }
