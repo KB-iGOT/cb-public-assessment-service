@@ -1365,7 +1365,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
     public void processDownloadNotification(Map<String, Object> notificationRequest) {
         try {
            String userId = (String) notificationRequest.get("userid");
-            String contextId = (String) notificationRequest.get("courseid");
+            String contextId = (String) (notificationRequest.get("courseid") != null ? notificationRequest.get("courseid") : notificationRequest.get("contextid"));
             String assessmentId = (String) notificationRequest.get("assessmentid");
             Map<String, Object> propertyMap = new HashMap<>();
             String encryptedEmail= encryptionService.encryptData(userId );
