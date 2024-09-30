@@ -27,6 +27,7 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
+import org.mortbay.util.SingletonList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -1358,6 +1359,46 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNode);
         } catch (Exception e) {
             logger.error("Failed to send kafka message: ", e);
+        }
+    }
+
+    @Override
+    public void processDownloadNotification(Map<String, Object> notificationRequest) {
+        try {
+           String userId = (String) notificationRequest.get("userid");
+            String contextId = (String) notificationRequest.get("courseid");
+            String assessmentId = (String) notificationRequest.get("assessmentid");
+            Map<String, Object> propertyMap = new HashMap<>();
+            String encryptedEmail= encryptionService.encryptData(userId );
+            propertyMap.put(Constants.USER_ID, encryptedEmail);
+            propertyMap.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
+            propertyMap.put(Constants.CONTEXT_ID, contextId);
+            List<Map<String, Object>> cassandraResponse = cassandraOperation.getRecordsByPropertiesWithoutFiltering(Constants.SUNBIRD_KEY_SPACE_NAME, serverProperties.getPublicUserAssessmentData(), propertyMap,null, null);
+            if(CollectionUtils.isEmpty(cassandraResponse)){
+                logger.info("");
+            }else {
+                String certificateUrl = (String)cassandraResponse.get(0).get("cert_publicurl");
+                String linkUrl = serverProperties.getPublicAccessUrl()+certificateUrl;
+
+                Map<String, Object> hierachyMap = new HashMap<>();
+                hierachyMap.put(Constants.IDENTIFIER, contextId);
+                List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), hierachyMap, null);
+
+                String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
+                Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
+                String courseName = (String) contentHierarchyObj.get(Constants.NAME);
+                String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
+
+                Map<String, Object> notificationData = new HashMap<>();
+                notificationData.put(Constants.USER_ID,Collections.singletonList(userId));
+                notificationData.put(Constants.COURSE_NAME, courseName);
+                notificationData.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+                notificationData.put(Constants.CERTIFICATE_LINK, linkUrl);
+                sendAssessmentNotification(notificationData,serverProperties.getPublicAssessmentCertificateTemplate(),true);
+            }
+        }catch (Exception e){
+            logger.info(e.getMessage());
+
         }
     }
 

@@ -114,6 +114,9 @@ public class ServerProperties {
 	@Value("{public.assessment.completion.template}")
 	private String publicAssessmentCompletionTemplate;
 
+	@Value("${public.access.url}")
+	private String publicAccessUrl;
+
 	@Value("${spring.kafka.public.assessment.notification.topic.name}")
 	private String springKafkaPublicAssessmentNotificationTopicName;
 
@@ -376,6 +379,14 @@ public class ServerProperties {
 
 	public void setPublicAssessmentCompletionTemplate(String publicAssessmentCompletionTemplate) {
 		this.publicAssessmentCompletionTemplate = publicAssessmentCompletionTemplate;
+	}
+
+	public String getPublicAccessUrl() {
+		return publicAccessUrl;
+	}
+
+	public void setPublicAccessUrl(String publicAccessUrl) {
+		this.publicAccessUrl = publicAccessUrl;
 	}
 
 
