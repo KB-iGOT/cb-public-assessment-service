@@ -5,7 +5,10 @@ import com.assessment.datasecurity.DecryptionService;
 import com.assessment.datasecurity.EncryptionService;
 import com.assessment.kafka.Producer;
 import com.assessment.kafka.service.KafkaCertificateProducerService;
+import com.assessment.model.Config;
+import com.assessment.model.NotificationAsyncRequest;
 import com.assessment.model.SBApiResponse;
+import com.assessment.model.Template;
 import com.assessment.repo.AssessmentRepository;
 import com.assessment.service.AssessmentServiceV5;
 import com.assessment.service.AssessmentUtilServiceV2;
@@ -22,6 +25,8 @@ import com.google.gson.reflect.TypeToken;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.VelocityEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +39,7 @@ import org.springframework.util.ObjectUtils;
 import javax.validation.Valid;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -901,6 +907,8 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             errMsg = "One or more mandatory fields are missing in Request. Mandatory fields are : "
                     + missingAttribs.toString();
         }
+        Map<String, Object> assessmentHierarchy = readAssessment((String) request.get(Constants.ASSESSMENT_IDENTIFIER), false);
+        // validate the hierachy
 
         return errMsg;
     }
@@ -1083,6 +1091,158 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             }
         }
         return null;
+    }
+  
+    @Override
+    public SBApiResponse notify(Map<String, Object> request) {
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_ASSESSMENT_NOTIFY);
+        try {
+            response = validateAssessmentRequest(request);
+            if (response.getResponseCode() != HttpStatus.OK) {
+                return response;
+            }
+            Map<String, Object> propertyMap = new HashMap<>();
+            String email = encryptionService.encryptData((String) request.get(Constants.USER_ID));
+            propertyMap.put(Constants.USER_ID, email);
+            propertyMap.put(Constants.ASSESSMENT_ID_KEY,request.get(Constants.ASSESSMENT_ID_KEY));
+            propertyMap.put(Constants.CONTEXT_ID, request.get(Constants.CONTEXT_ID));
+            List<Map<String, Object>> cassandraResponse = cassandraOperation.getRecordsByPropertiesWithoutFiltering(Constants.SUNBIRD_KEY_SPACE_NAME, serverProperties.getPublicUserAssessmentData(), propertyMap,null, null);
+            SBApiResponse userValidationResponse = validateUserAssementData(cassandraResponse);
+            if (userValidationResponse.getResponseCode() != HttpStatus.OK) {
+                return userValidationResponse;
+            }
+
+            Map<String, Object> property = new HashMap<>();
+            propertyMap.put(Constants.IDENTIFIER, request.get(Constants.COURSE_ID));
+            List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), property, null);
+
+            String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
+            Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
+            Map<String, Object> mailNotificationDetails = new HashMap<>();
+            mailNotificationDetails.put(Constants.RECIPIENT_EMAILS, email);
+            mailNotificationDetails.put(Constants.COURSE_NAME, (String) contentHierarchyObj.get(Constants.NAME));
+            //mailNotificationDetails.put(Constants.LINK, request.get("link"));
+            mailNotificationDetails.put(Constants.COURSE_POSTER_IMAGE_URL, (String) contentHierarchyObj.get(Constants.POSTER_IMAGE));
+            mailNotificationDetails.put(Constants.SUBJECT,"Completion certificate");
+            sendAssessmentNotification(mailNotificationDetails);
+            response.setResponseCode(HttpStatus.OK);
+            response.getParams().setStatus(Constants.SUCCESS);
+        }catch (Exception e){
+            logger.error("failed to send the assessment notification :: " + e);
+            response.setResponseCode(HttpStatus.INTERNAL_SERVER_ERROR);
+            response.getParams().setStatus(Constants.FAILED);
+        }
+        return response;
+    }
+
+    private void sendAssessmentNotification(Map<String, Object> mailNotificationDetails) {
+        Map<String, Object> params = new HashMap<>();
+        NotificationAsyncRequest notificationRequest = new NotificationAsyncRequest();
+        Map<String, Object> action = new HashMap<>();
+        Map<String, Object> templ = new HashMap<>();
+        Map<String, Object> usermap = new HashMap<>();
+        params.put(Constants.COURSE_NAME, mailNotificationDetails.get(Constants.COURSE_NAME));
+        params.put("coursePosterImage", mailNotificationDetails.get(Constants.COURSE_POSTER_IMAGE_URL));
+        params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
+        Template template = new Template(constructEmailTemplate(serverProperties.getPublicAssessmentCertificateTemplate(), params), serverProperties.getPublicAssessmentCertificateTemplate(), params);
+        usermap.put(Constants.ID, "");
+        usermap.put(Constants.TYPE, Constants.USER);
+        action.put(Constants.TEMPLATE, templ);
+        action.put(Constants.TYPE, Constants.EMAIL);
+        action.put(Constants.CATEGORY, Constants.EMAIL);
+        action.put(Constants.CREATED_BY, usermap);
+        Config config = new Config();
+        config.setSubject((String) mailNotificationDetails.get(Constants.SUBJECT));
+        config.setSender(serverProperties.getSupportEmail());
+        templ.put(Constants.TYPE, Constants.EMAIL);
+        templ.put(Constants.DATA, template.getData());
+        templ.put(Constants.ID, template.getId());
+        templ.put(Constants.PARAMS, params);
+        templ.put(Constants.CONFIG, config);
+        notificationRequest.setType(Constants.EMAIL);
+        notificationRequest.setPriority(1);
+        notificationRequest.setIds((List<String>) mailNotificationDetails.get(Constants.RECIPIENT_EMAILS));
+        notificationRequest.setAction(action);
+
+        Map<String, Object> req = new HashMap<>();
+        Map<String, List<NotificationAsyncRequest>> notificationMap = new HashMap<>();
+        notificationMap.put(Constants.NOTIFICATIONS, Collections.singletonList(notificationRequest));
+        req.put(Constants.REQUEST, notificationMap);
+        sendNotification(req);
+    }
+
+    private String constructEmailTemplate(String templateName, Map<String, Object> params) {
+        String replacedHTML = new String();
+        try {
+            Map<String, Object> propertyMap = new HashMap<>();
+            propertyMap.put(Constants.NAME, templateName);
+            List<Map<String, Object>> templateMap = cassandraOperation.getRecordsByProperties(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_EMAIL_TEMPLATE, propertyMap, Collections.singletonList(Constants.TEMPLATE));
+            String htmlTemplate = templateMap.stream()
+                    .findFirst()
+                    .map(template -> (String) template.get(Constants.TEMPLATE))
+                    .orElse(null);
+            VelocityEngine velocityEngine = new VelocityEngine();
+            velocityEngine.init();
+            VelocityContext context = new VelocityContext();
+            for (Map.Entry<String, Object> entry : params.entrySet()) {
+                context.put(entry.getKey(), entry.getValue());
+            }
+            StringWriter writer = new StringWriter();
+            velocityEngine.evaluate(context, writer, "HTMLTemplate", htmlTemplate);
+            replacedHTML = writer.toString();
+        } catch (Exception e) {
+            logger.error("Unable to create template ", e);
+        }
+        return replacedHTML;
+    }
+
+    public SBApiResponse validateAssessmentRequest(Map<String,Object> request){
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_ASSESSMENT_NOTIFY);
+        //assessment read
+
+
+        if (ObjectUtils.isEmpty(request)) {
+            updateErrorDetails(response, "", HttpStatus.BAD_REQUEST);
+            return response;
+        }
+        if (StringUtils.isEmpty((String) request.get(Constants.USER_ID))) {
+            updateErrorDetails(response, "", HttpStatus.BAD_REQUEST);
+            return response;
+        }
+        if (StringUtils.isEmpty((String) request.get(Constants.ASSESSMENT_ID_KEY))) {
+            updateErrorDetails(response, "", HttpStatus.BAD_REQUEST);
+            return response;
+        }
+        if (StringUtils.isEmpty((String) request.get(Constants.CONTEXT_ID))) {
+            updateErrorDetails(response, "", HttpStatus.BAD_REQUEST);
+            return response;
+        }
+
+        return null;
+    }
+
+    private void sendNotification(Map<String, Object> request) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(serverProperties.getNotifyServiceHost()).append(serverProperties.getNotifyServicePathAsync());
+        try {
+            logger.info(mapper.writeValueAsString(request));
+            Map<String, Object> response = outboundRequestHandlerService.fetchResultUsingPost(builder.toString(), request, null);
+            logger.debug("The email notification is successfully sent, response is: " + response);
+        } catch (Exception e) {
+            logger.error("Exception while posting the data in notification service: ", e);
+        }
+    }
+
+    private SBApiResponse validateUserAssementData(List<Map<String, Object>> userAssessmentData) {
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_ASSESSMENT_NOTIFY);
+
+        if (CollectionUtils.isEmpty(userAssessmentData)) {
+            updateErrorDetails(response, "User assessment data not found", HttpStatus.BAD_REQUEST);
+            return response;
+        }
+        // validate pass status
+
+        return response;
     }
 
 }
