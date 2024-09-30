@@ -27,8 +27,10 @@ public class NotificationConsumer {
 
     @KafkaListener(groupId="${kafka.topic.certificate.assessment.group}", topics = "${kafka.topic.certificate.request}")
     public void notificationConsumer(ConsumerRecord<String, String> request) {
+        logger.info("kafka notification received");
         try{
-            Map<String, Object> map = mapper.readValue(request.value(), new TypeReference<Map<String, Object>>() {});
+            logger.info("Received notification request: " + request.value());
+            Map<String, Object> map = mapper.readValue(request.value(), HashMap.class);
             CompletableFuture.runAsync(() -> {
                 assessmentServiceV5.processNotification(map);
             });
