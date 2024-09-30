@@ -223,6 +223,8 @@ public class Constants {
 	public static final String COURSE_POSTER_IMAGE_KEY = "coursePosterImage";
 	public static final String E_DATA ="edata";
 	public static final String RELATED = "related";
+	public static final String ISSUED_CERTIFICATE  = "issued_certificates";
+	public static final String CERT_PUBLIC_URL ="cert_publicurl";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");

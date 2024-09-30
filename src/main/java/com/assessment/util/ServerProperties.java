@@ -111,6 +111,12 @@ public class ServerProperties {
 	@Value("${kafka.topic.certificate.request}")
 	private String kafkaTopicCertificateRequest;
 
+	@Value("${spring.kafka.public.assessment.notification.topic.name}")
+	private String springKafkaPublicAssessmentNotificationTopicName;
+
+	@Value("${public.assessment.cert.generation.post.process.topic}")
+	private String publicAssessmentCertGenerationPostProcessTopic;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -359,5 +365,21 @@ public class ServerProperties {
 
 	public void setKafkaTopicCertificateRequest(String kafkaTopicCertificateRequest) {
 		this.kafkaTopicCertificateRequest = kafkaTopicCertificateRequest;
+	}
+
+	public String getSpringKafkaPublicAssessmentNotificationTopicName() {
+		return springKafkaPublicAssessmentNotificationTopicName;
+	}
+
+	public void setSpringKafkaPublicAssessmentNotificationTopicName(String springKafkaPublicAssessmentNotificationTopicName) {
+		this.springKafkaPublicAssessmentNotificationTopicName = springKafkaPublicAssessmentNotificationTopicName;
+	}
+
+	public String getPublicAssessmentCertGenerationPostProcessTopic() {
+		return publicAssessmentCertGenerationPostProcessTopic;
+	}
+
+	public void setPublicAssessmentCertGenerationPostProcessTopic(String publicAssessmentCertGenerationPostProcessTopic) {
+		this.publicAssessmentCertGenerationPostProcessTopic = publicAssessmentCertGenerationPostProcessTopic;
 	}
 }
