@@ -417,52 +417,62 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             if (questionSetFromAssessment.get(Constants.START_TIME) != null) {
                 Long existingAssessmentStartTime = (Long) questionSetFromAssessment.get(Constants.START_TIME);
                 Timestamp startTime = new Timestamp(existingAssessmentStartTime);
+                String assessmentId = (String) submitRequest.get(Constants.IDENTIFIER);
                 Boolean isAssessmentUpdatedToDB = assessmentRepository.updateUserAssesmentDataToDB(email,
-                        (String) submitRequest.get(Constants.IDENTIFIER), submitRequest, result, Constants.SUBMITTED,
-                        startTime, null,contextId);
+                        assessmentId, submitRequest, result, Constants.SUBMITTED,
+                        startTime, null, contextId);
 
                 List<String> notAllowedForKafkaEvent = serverProperties.getAssessmentPrimaryKeyNotAllowedCertificate();
                 if (Boolean.TRUE.equals(isAssessmentUpdatedToDB) && Boolean.TRUE.equals(result.get(Constants.PASS)) && notAllowedForKafkaEvent.stream()
                         .noneMatch(key -> key.equals(primaryCategory))) {
 
-                    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-                    String completionDate = dateFormat.format(new Date());
-
-                    List<Map<String, Object>> submitedAssessmentDetails = assessmentRepository.fetchUserAssessmentDataFromDB(email, (String) submitRequest.get(Constants.IDENTIFIER));
-                    String recipientName = (String) submitedAssessmentDetails.get(0).get(Constants.NAME);
-
-                    Map<String, Object> propertyMap = new HashMap<>();
-                    propertyMap.put(Constants.IDENTIFIER, submitRequest.get(Constants.COURSE_ID));
-                    List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), propertyMap, null);
-
-                    String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
-                    Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
-                    String courseProvider = (String) contentHierarchyObj.get(Constants.SOURCE);
-                    String courseName = (String) contentHierarchyObj.get(Constants.NAME);
-                    String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
-
-
-                    Resource resource = resourceLoader.getResource("classpath:certificate-kafka-json.json");
-                    InputStream inputStream = resource.getInputStream();
-                    JsonNode jsonNode = mapper.readTree(inputStream);
-
-                    Map<String, Object> certificateRequest = new HashMap<>();
-                    certificateRequest.put(Constants.USER_ID, decryptionService.decryptData(email));
-                    certificateRequest.put(Constants.ASSESSMENT_ID_KEY, submitRequest.get(Constants.IDENTIFIER));
-                    certificateRequest.put(Constants.COURSE_ID, submitRequest.get(Constants.COURSE_ID));
-                    certificateRequest.put(Constants.COMPLETION_DATE, completionDate);
-                    certificateRequest.put(Constants.PROVIDER_NAME, courseProvider);
-                    certificateRequest.put(Constants.COURSE_NAME, courseName);
-                    certificateRequest.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
-                    certificateRequest.put(Constants.RECIPIENT_NAME, recipientName);
-                    kafkaCertificateProducerService.replacePlaceholders(jsonNode, certificateRequest);
-                    String jsonNodeStr = mapper.writeValueAsString(jsonNode);
-                    producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNodeStr);
+                    sendMessageToKafkaForCertificate(submitRequest, email, contextId, assessmentId);
 
                 }
             }
         } catch (Exception e) {
             logger.error("Failed to write data for assessment submit response. Exception: ", e);
+        }
+    }
+
+    private void sendMessageToKafkaForCertificate(Map<String, Object> submitRequest, String email, String contextId, String assessmentId) throws IOException {
+
+        try {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+            String completionDate = dateFormat.format(new Date());
+
+            List<Map<String, Object>> submitedAssessmentDetails = assessmentRepository.fetchUserAssessmentDataFromDB(email, (String) submitRequest.get(Constants.IDENTIFIER));
+            String recipientName = (String) submitedAssessmentDetails.get(0).get(Constants.NAME);
+
+            Map<String, Object> propertyMap = new HashMap<>();
+            propertyMap.put(Constants.IDENTIFIER, contextId);
+            List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), propertyMap, null);
+
+            String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
+            Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
+            String courseProvider = (String) contentHierarchyObj.get(Constants.SOURCE);
+            String courseName = (String) contentHierarchyObj.get(Constants.NAME);
+            String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
+
+
+            Resource resource = resourceLoader.getResource("classpath:certificate-kafka-json.json");
+            InputStream inputStream = resource.getInputStream();
+            JsonNode jsonNode = mapper.readTree(inputStream);
+
+            Map<String, Object> certificateRequest = new HashMap<>();
+            certificateRequest.put(Constants.USER_ID, decryptionService.decryptData(email));
+            certificateRequest.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
+            certificateRequest.put(Constants.COURSE_ID, contextId);
+            certificateRequest.put(Constants.COMPLETION_DATE, completionDate);
+            certificateRequest.put(Constants.PROVIDER_NAME, courseProvider);
+            certificateRequest.put(Constants.COURSE_NAME, courseName);
+            certificateRequest.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+            certificateRequest.put(Constants.RECIPIENT_NAME, recipientName);
+            kafkaCertificateProducerService.replacePlaceholders(jsonNode, certificateRequest);
+            String jsonNodeStr = mapper.writeValueAsString(jsonNode);
+            producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNodeStr);
+        }catch (Exception e){
+            logger.error("Failed to send kafka message: ", e);
         }
     }
 
