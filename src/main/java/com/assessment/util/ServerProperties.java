@@ -105,6 +105,24 @@ public class ServerProperties {
 	@Value("${public.assessment.certificate.template}")
 	private String publicAssessmentCertificateTemplate;
 
+	@Value("${kafka.topic.certificate.assessment.group}")
+	private String kafkaTopicCertificateAssessmentGroup;
+
+	@Value("${kafka.topic.certificate.request}")
+	private String kafkaTopicCertificateRequest;
+
+	@Value("{public.assessment.completion.template}")
+	private String publicAssessmentCompletionTemplate;
+
+	@Value("${public.access.url}")
+	private String publicAccessUrl;
+
+	@Value("${spring.kafka.public.assessment.notification.topic.name}")
+	private String springKafkaPublicAssessmentNotificationTopicName;
+
+	@Value("${public.assessment.cert.generation.post.process.topic}")
+	private String publicAssessmentCertGenerationPostProcessTopic;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -339,4 +357,53 @@ public class ServerProperties {
 		this.publicAssessmentCertificateTemplate = publicAssessmentCertificateTemplate;
 	}
 
+	public String getKafkaTopicCertificateAssessmentGroup() {
+		return kafkaTopicCertificateAssessmentGroup;
+	}
+
+	public void setKafkaTopicCertificateAssessmentGroup(String kafkaTopicCertificateAssessmentGroup) {
+		this.kafkaTopicCertificateAssessmentGroup = kafkaTopicCertificateAssessmentGroup;
+	}
+
+	public String getKafkaTopicCertificateRequest() {
+		return kafkaTopicCertificateRequest;
+	}
+
+	public void setKafkaTopicCertificateRequest(String kafkaTopicCertificateRequest) {
+		this.kafkaTopicCertificateRequest = kafkaTopicCertificateRequest;
+	}
+
+	public String getPublicAssessmentCompletionTemplate() {
+		return publicAssessmentCompletionTemplate;
+	}
+
+	public void setPublicAssessmentCompletionTemplate(String publicAssessmentCompletionTemplate) {
+		this.publicAssessmentCompletionTemplate = publicAssessmentCompletionTemplate;
+	}
+
+	public String getPublicAccessUrl() {
+		return publicAccessUrl;
+	}
+
+	public void setPublicAccessUrl(String publicAccessUrl) {
+		this.publicAccessUrl = publicAccessUrl;
+	}
+
+
+	public String getSpringKafkaPublicAssessmentNotificationTopicName() {
+		return springKafkaPublicAssessmentNotificationTopicName;
+	}
+
+	public void setSpringKafkaPublicAssessmentNotificationTopicName(String springKafkaPublicAssessmentNotificationTopicName) {
+		this.springKafkaPublicAssessmentNotificationTopicName = springKafkaPublicAssessmentNotificationTopicName;
+	}
+
+	public String getPublicAssessmentCertGenerationPostProcessTopic() {
+		return publicAssessmentCertGenerationPostProcessTopic;
+	}
+
+	public void setPublicAssessmentCertGenerationPostProcessTopic(String publicAssessmentCertGenerationPostProcessTopic) {
+		this.publicAssessmentCertGenerationPostProcessTopic = publicAssessmentCertGenerationPostProcessTopic;
+
+	}
 }
