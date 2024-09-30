@@ -376,6 +376,8 @@ public class ServerProperties {
 
 	public void setPublicAssessmentCompletionTemplate(String publicAssessmentCompletionTemplate) {
 		this.publicAssessmentCompletionTemplate = publicAssessmentCompletionTemplate;
+	}
+
     
 	public String getSpringKafkaPublicAssessmentNotificationTopicName() {
 		return springKafkaPublicAssessmentNotificationTopicName;
