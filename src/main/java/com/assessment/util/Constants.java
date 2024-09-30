@@ -220,6 +220,9 @@ public class Constants {
 	public static final String TABLE_EMAIL_TEMPLATE = "email_template";
 	public static final String CREATED_BY = "createdBy";
 	public static final String CERTIFICATE_LINK = "certificateLink";
+	public static final String COURSE_POSTER_IMAGE_KEY = "coursePosterImage";
+	public static final String E_DATA ="edata";
+	public static final String RELATED = "related";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");
