@@ -1377,6 +1377,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 logger.info("");
             }else {
                 String certificateUrl = (String)cassandraResponse.get(0).get("cert_publicurl");
+                if(certificateUrl.contains(serverProperties.getCloudStorageUrl())){
+                    certificateUrl = certificateUrl.replace(serverProperties.getCloudStorageUrl(),"");
+                }
                 String linkUrl = serverProperties.getPublicAccessUrl()+certificateUrl;
 
                 Map<String, Object> hierachyMap = new HashMap<>();
@@ -1391,7 +1394,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 Map<String, Object> notificationData = new HashMap<>();
                 notificationData.put(Constants.RECIPIENT_EMAILS,Collections.singletonList(userId));
                 notificationData.put(Constants.COURSE_NAME, courseName);
-                notificationData.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+                notificationData.put(Constants.COURSE_POSTER_IMAGE_URL, coursePosterImage);
                 notificationData.put(Constants.CERTIFICATE_LINK, linkUrl);
                 notificationData.put(Constants.SUBJECT,Constants.COURSE_COMPLETE_SUBJECT);
                 sendAssessmentNotification(notificationData,serverProperties.getPublicAssessmentCertificateTemplate(),true);
