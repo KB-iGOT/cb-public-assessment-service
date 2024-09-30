@@ -111,9 +111,9 @@ public class ServerProperties {
 	@Value("${kafka.topic.certificate.request}")
 	private String kafkaTopicCertificateRequest;
 
-  @Value("{public.assessment.completion.template}")
+	@Value("{public.assessment.completion.template}")
 	private String publicAssessmentCompletionTemplate;
-  
+
 	@Value("${spring.kafka.public.assessment.notification.topic.name}")
 	private String springKafkaPublicAssessmentNotificationTopicName;
 
@@ -370,7 +370,7 @@ public class ServerProperties {
 		this.kafkaTopicCertificateRequest = kafkaTopicCertificateRequest;
 	}
 
-  public String getPublicAssessmentCompletionTemplate() {
+	public String getPublicAssessmentCompletionTemplate() {
 		return publicAssessmentCompletionTemplate;
 	}
 
@@ -378,7 +378,7 @@ public class ServerProperties {
 		this.publicAssessmentCompletionTemplate = publicAssessmentCompletionTemplate;
 	}
 
-    
+
 	public String getSpringKafkaPublicAssessmentNotificationTopicName() {
 		return springKafkaPublicAssessmentNotificationTopicName;
 	}

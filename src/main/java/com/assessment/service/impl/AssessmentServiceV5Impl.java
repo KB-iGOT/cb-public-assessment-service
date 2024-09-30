@@ -1281,12 +1281,12 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 Boolean passStatus = (Boolean) submitedAssessmentDetails.get(0).get(Constants.PASS_STATUS);
 
                 if (Boolean.TRUE.equals(passStatus)) {
-                    List<Map<String, Object>> issuedCertificates= (List<Map<String, Object>>) submitedAssessmentDetails.get(0).get(Constants.ISSUED_CERTIFICATE);
+                    List<Map<String, Object>> issuedCertificates = (List<Map<String, Object>>) submitedAssessmentDetails.get(0).get(Constants.ISSUED_CERTIFICATE);
                     String certPublicUrl = (String) submitedAssessmentDetails.get(0).get(Constants.CERT_PUBLIC_URL);
-                    if(!CollectionUtils.isEmpty(issuedCertificates)) {
+                    if (!CollectionUtils.isEmpty(issuedCertificates)) {
                         logger.info("AssessmentServiceV5Impl::raising event to cert pdf generator");
                         resendMessageToKafkaForCertificate(recipientName, encryptedEmail, contextId, assessmentId);
-                    }else if(!StringUtils.isEmpty(certPublicUrl)){
+                    } else if (!StringUtils.isEmpty(certPublicUrl)) {
 
                         logger.info("AssessmentServiceV5Impl::raising event to cert post pdf generator");
                         Map<String, Object> kafkaInputPostPdfGeneration = new HashMap<>();
@@ -1294,7 +1294,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                         kafkaInputPostPdfGeneration.put("courseid", contextId);
                         kafkaInputPostPdfGeneration.put("assessmentid", assessmentId);
                         producer.push(serverProperties.getPublicAssessmentCertGenerationPostProcessTopic(), kafkaInputPostPdfGeneration);
-                    }else {
+                    } else {
                         logger.info("AssessmentServiceV5Impl::notify user on email");
                         Map<String, Object> notificationInput = new HashMap<>();
                         notificationInput.put(Constants.USER_ID, email);
@@ -1356,7 +1356,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             certificateRequest.put(Constants.RECIPIENT_NAME, recipientName);
             kafkaCertificateProducerService.replacePlaceholders(jsonNode, certificateRequest);
             producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNode);
-        }catch (Exception e){
+        } catch (Exception e) {
             logger.error("Failed to send kafka message: ", e);
         }
     }
