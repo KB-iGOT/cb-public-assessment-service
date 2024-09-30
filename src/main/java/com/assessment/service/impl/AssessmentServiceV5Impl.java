@@ -1105,7 +1105,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
   
     @Override
     public void processNotification (Map<String, Object> request) {
+        logger.info("kafka notification processing started");
         try {
+            logger.info("Processing notification request: " + mapper.writeValueAsString(request));
             String error = validateAssessmentRequest(request);
             if (StringUtils.isNotBlank(error)) {
                 logger.info(error);
