@@ -25,7 +25,7 @@ public class NotificationConsumer {
     private ObjectMapper mapper = new ObjectMapper();
     private final Logger logger = LoggerFactory.getLogger(NotificationConsumer.class);
 
-    @KafkaListener(groupId="notification-group-id", topics = "notification-topic")
+    @KafkaListener(groupId="${kafka.topic.certificate.assessment.group}", topics = "${kafka.topic.certificate.request}")
     public void notificationConsumer(ConsumerRecord<String, String> request) {
         try{
             Map<String, Object> map = mapper.readValue(request.value(), new TypeReference<Map<String, Object>>() {});

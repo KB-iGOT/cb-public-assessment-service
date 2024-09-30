@@ -105,6 +105,12 @@ public class ServerProperties {
 	@Value("${public.assessment.certificate.template}")
 	private String publicAssessmentCertificateTemplate;
 
+	@Value("${kafka.topic.certificate.assessment.group}")
+	private String kafkaTopicCertificateAssessmentGroup;
+
+	@Value("${kafka.topic.certificate.request}")
+	private String kafkaTopicCertificateRequest;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -339,4 +345,19 @@ public class ServerProperties {
 		this.publicAssessmentCertificateTemplate = publicAssessmentCertificateTemplate;
 	}
 
+	public String getKafkaTopicCertificateAssessmentGroup() {
+		return kafkaTopicCertificateAssessmentGroup;
+	}
+
+	public void setKafkaTopicCertificateAssessmentGroup(String kafkaTopicCertificateAssessmentGroup) {
+		this.kafkaTopicCertificateAssessmentGroup = kafkaTopicCertificateAssessmentGroup;
+	}
+
+	public String getKafkaTopicCertificateRequest() {
+		return kafkaTopicCertificateRequest;
+	}
+
+	public void setKafkaTopicCertificateRequest(String kafkaTopicCertificateRequest) {
+		this.kafkaTopicCertificateRequest = kafkaTopicCertificateRequest;
+	}
 }
