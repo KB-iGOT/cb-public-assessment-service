@@ -1132,14 +1132,14 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             mailNotificationDetails.put(Constants.COURSE_NAME, edata.get(Constants.COURSE_NAME));
             mailNotificationDetails.put(Constants.COURSE_POSTER_IMAGE_URL, edata.get(Constants.COURSE_POSTER_IMAGE));
             mailNotificationDetails.put(Constants.SUBJECT,Constants.COURSE_COMPLETION_SUBJECT);
-            sendAssessmentNotification(mailNotificationDetails);
+            sendAssessmentNotification(mailNotificationDetails,serverProperties.getPublicAssessmentCompletionTemplate(),false);
             logger.info("assessment notification sent successfully");
         }catch (Exception e){
             logger.error("failed to send the assessment notification :: " + e);
         }
     }
 
-    private void sendAssessmentNotification(Map<String, Object> mailNotificationDetails) {
+    private void sendAssessmentNotification(Map<String, Object> mailNotificationDetails,String templateName,boolean isCertificateNotification) {
         Map<String, Object> params = new HashMap<>();
         NotificationAsyncRequest notificationRequest = new NotificationAsyncRequest();
         Map<String, Object> action = new HashMap<>();
@@ -1147,8 +1147,10 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         Map<String, Object> usermap = new HashMap<>();
         params.put(Constants.COURSE_NAME, mailNotificationDetails.get(Constants.COURSE_NAME));
         params.put(Constants.COURSE_POSTER_IMAGE_KEY, mailNotificationDetails.get(Constants.COURSE_POSTER_IMAGE_URL));
-        //params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
-        Template template = new Template(constructEmailTemplate(serverProperties.getPublicAssessmentCompletionTemplate(), params), serverProperties.getPublicAssessmentCompletionTemplate(), params);
+        if(isCertificateNotification){
+            params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
+        }
+        Template template = new Template(constructEmailTemplate(templateName, params), templateName, params);
         usermap.put(Constants.ID, "");
         usermap.put(Constants.TYPE, Constants.USER);
         action.put(Constants.TEMPLATE, templ);
