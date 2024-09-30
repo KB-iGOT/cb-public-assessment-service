@@ -114,6 +114,9 @@ public class ServerProperties {
 	@Value("{public.assessment.completion.template}")
 	private String publicAssessmentCompletionTemplate;
 
+	@Value("${public.access.url}")
+	private String publicAccessUrl;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -370,5 +373,13 @@ public class ServerProperties {
 
 	public void setPublicAssessmentCompletionTemplate(String publicAssessmentCompletionTemplate) {
 		this.publicAssessmentCompletionTemplate = publicAssessmentCompletionTemplate;
+	}
+
+	public String getPublicAccessUrl() {
+		return publicAccessUrl;
+	}
+
+	public void setPublicAccessUrl(String publicAccessUrl) {
+		this.publicAccessUrl = publicAccessUrl;
 	}
 }

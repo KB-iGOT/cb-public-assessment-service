@@ -27,6 +27,7 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.VelocityEngine;
+import org.mortbay.util.SingletonList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -1131,14 +1132,14 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             mailNotificationDetails.put(Constants.COURSE_NAME, edata.get(Constants.COURSE_NAME));
             mailNotificationDetails.put(Constants.COURSE_POSTER_IMAGE_URL, edata.get(Constants.COURSE_POSTER_IMAGE));
             mailNotificationDetails.put(Constants.SUBJECT,Constants.COURSE_COMPLETION_SUBJECT);
-            sendAssessmentNotification(mailNotificationDetails);
+            sendAssessmentNotification(mailNotificationDetails,serverProperties.getPublicAssessmentCompletionTemplate(),false);
             logger.info("assessment notification sent successfully");
         }catch (Exception e){
             logger.error("failed to send the assessment notification :: " + e);
         }
     }
 
-    private void sendAssessmentNotification(Map<String, Object> mailNotificationDetails) {
+    private void sendAssessmentNotification(Map<String, Object> mailNotificationDetails,String templateName,boolean isCertificateNotification) {
         Map<String, Object> params = new HashMap<>();
         NotificationAsyncRequest notificationRequest = new NotificationAsyncRequest();
         Map<String, Object> action = new HashMap<>();
@@ -1146,8 +1147,10 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         Map<String, Object> usermap = new HashMap<>();
         params.put(Constants.COURSE_NAME, mailNotificationDetails.get(Constants.COURSE_NAME));
         params.put(Constants.COURSE_POSTER_IMAGE_KEY, mailNotificationDetails.get(Constants.COURSE_POSTER_IMAGE_URL));
-        //params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
-        Template template = new Template(constructEmailTemplate(serverProperties.getPublicAssessmentCompletionTemplate(), params), serverProperties.getPublicAssessmentCompletionTemplate(), params);
+        if(isCertificateNotification){
+            params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
+        }
+        Template template = new Template(constructEmailTemplate(templateName, params), templateName, params);
         usermap.put(Constants.ID, "");
         usermap.put(Constants.TYPE, Constants.USER);
         action.put(Constants.TEMPLATE, templ);
@@ -1253,6 +1256,46 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             return error;
         }
         return error;
+    }
+
+    @Override
+    public void processDownloadNotification(Map<String, Object> notificationRequest) {
+        try {
+           String userId = (String) notificationRequest.get("userid");
+            String contextId = (String) notificationRequest.get("courseid");
+            String assessmentId = (String) notificationRequest.get("assessmentid");
+            Map<String, Object> propertyMap = new HashMap<>();
+            String encryptedEmail= encryptionService.encryptData(userId );
+            propertyMap.put(Constants.USER_ID, encryptedEmail);
+            propertyMap.put(Constants.ASSESSMENT_ID_KEY, assessmentId);
+            propertyMap.put(Constants.CONTEXT_ID, contextId);
+            List<Map<String, Object>> cassandraResponse = cassandraOperation.getRecordsByPropertiesWithoutFiltering(Constants.SUNBIRD_KEY_SPACE_NAME, serverProperties.getPublicUserAssessmentData(), propertyMap,null, null);
+            if(CollectionUtils.isEmpty(cassandraResponse)){
+                logger.info("");
+            }else {
+                String certificateUrl = (String)cassandraResponse.get(0).get("cert_publicurl");
+                String linkUrl = serverProperties.getPublicAccessUrl()+certificateUrl;
+
+                Map<String, Object> hierachyMap = new HashMap<>();
+                hierachyMap.put(Constants.IDENTIFIER, contextId);
+                List<Map<String, Object>> contentHierarchyDetails = cassandraOperation.getRecordsByProperties(serverProperties.getContentHierarchyNamespace(), serverProperties.getContentHierarchyTable(), hierachyMap, null);
+
+                String contentHierarchyStr = (String) contentHierarchyDetails.get(0).get(Constants.HIERARCHY);
+                Map<String, Object> contentHierarchyObj = mapper.readValue(contentHierarchyStr, HashMap.class);
+                String courseName = (String) contentHierarchyObj.get(Constants.NAME);
+                String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
+
+                Map<String, Object> notificationData = new HashMap<>();
+                notificationData.put(Constants.USER_ID,Collections.singletonList(userId));
+                notificationData.put(Constants.COURSE_NAME, courseName);
+                notificationData.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+                notificationData.put(Constants.CERTIFICATE_LINK, linkUrl);
+                sendAssessmentNotification(notificationData,serverProperties.getPublicAssessmentCertificateTemplate(),true);
+            }
+        }catch (Exception e){
+            logger.info(e.getMessage());
+
+        }
     }
 
 }

@@ -38,4 +38,18 @@ public class NotificationConsumer {
             logger.error(String.format("Error in notification request:: %s " + e.getMessage()),e);
         }
     }
+
+    @KafkaListener(groupId="${kafka.topic.certificate.assessment.group}", topics = "${kafka.topic.download.certificate}")
+    public void notifyDownloadCertificate(ConsumerRecord<String, String> request) {
+        logger.info("kafka notification received");
+        try{
+            logger.info("Received notification request: " + request.value());
+            Map<String, Object> map = mapper.readValue(request.value(), HashMap.class);
+            CompletableFuture.runAsync(() -> {
+                assessmentServiceV5.processDownloadNotification(map);
+            });
+        } catch (Exception e) {
+            logger.error(String.format("Error in notification request:: %s " + e.getMessage()),e);
+        }
+    }
 }

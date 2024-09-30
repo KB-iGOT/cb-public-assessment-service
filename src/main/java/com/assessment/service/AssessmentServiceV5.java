@@ -35,4 +35,6 @@ public interface AssessmentServiceV5 {
     public SBApiResponse readAssessmentResultV5(Map<String, Object> request);
 
     void processNotification(Map<String, Object> notificationRequest);
+
+    void processDownloadNotification(Map<String, Object> notificationRequest);
 }
