@@ -1393,6 +1393,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 notificationData.put(Constants.COURSE_NAME, courseName);
                 notificationData.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
                 notificationData.put(Constants.CERTIFICATE_LINK, linkUrl);
+                notificationData.put(Constants.SUBJECT,Constants.COURSE_COMPLETE_SUBJECT);
                 sendAssessmentNotification(notificationData,serverProperties.getPublicAssessmentCertificateTemplate(),true);
             }
         }catch (Exception e){
