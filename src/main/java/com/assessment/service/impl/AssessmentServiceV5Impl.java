@@ -1389,7 +1389,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
 
                 Map<String, Object> notificationData = new HashMap<>();
-                notificationData.put(Constants.USER_ID,Collections.singletonList(userId));
+                notificationData.put(Constants.RECIPIENT_EMAILS,Collections.singletonList(userId));
                 notificationData.put(Constants.COURSE_NAME, courseName);
                 notificationData.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
                 notificationData.put(Constants.CERTIFICATE_LINK, linkUrl);
