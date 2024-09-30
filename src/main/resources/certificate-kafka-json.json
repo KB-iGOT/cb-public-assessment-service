@@ -47,6 +47,7 @@
     "svgTemplate": "${svgTemplate}",
     "tag": "${course.id}",
     "templateId": "do_114104376473182208114",
+    "assessmentId": "${assessment.id}",
     "userId": "${user.id}"
   },
   "eid": "BE_JOB_REQUEST",
