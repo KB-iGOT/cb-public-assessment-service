@@ -223,6 +223,7 @@ public class Constants {
 	public static final String COURSE_POSTER_IMAGE_KEY = "coursePosterImage";
 	public static final String E_DATA ="edata";
 	public static final String RELATED = "related";
+	public static final String COURSE_COMPLETION_SUBJECT = "Congratulations on your successful completion of a course at iGOT Karmayogi!";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");
