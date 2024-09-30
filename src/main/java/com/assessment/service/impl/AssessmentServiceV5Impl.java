@@ -96,29 +96,42 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         SBApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.API_SUBMIT_ASSESSMENT);
         long assessmentCompletionTime = Calendar.getInstance().getTime().getTime();
         try {
-            // Step-1 fetch userid
-            String email = (String) submitRequest.get(Constants.EMAIL);
-            if (!ProjectUtil.validateEmailPattern(email)) {
-                updateErrorDetails(outgoingResponse, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
-                return outgoingResponse;
-            }
-            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
-            email = encryptionService.encryptData(email);
-            String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
             String errMsg;
             List<Map<String, Object>> sectionListFromSubmitRequest = new ArrayList<>();
             List<Map<String, Object>> hierarchySectionList = new ArrayList<>();
-            Map<String, Object> assessmentHierarchy = new HashMap<>();
             Map<String, Object> existingAssessmentData = new HashMap<>();
-            //Confirm whether the submitted request sections and questions match.
-            errMsg = validateSubmitAssessmentRequest(submitRequest, email, contextId, hierarchySectionList,
-                    sectionListFromSubmitRequest, assessmentHierarchy, existingAssessmentData, editMode);
-            if (StringUtils.isNotBlank(errMsg)) {
-                updateErrorDetails(outgoingResponse, errMsg, HttpStatus.BAD_REQUEST);
-                return outgoingResponse;
+
+            // Step-1 fetch userid
+            String email = (String) submitRequest.get(Constants.EMAIL);
+            String contextId = (String) submitRequest.get(Constants.CONTEXT_ID);
+            String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
+
+            SBApiResponse errResponse = validateSubmitAssessmentPayload(email, assessmentIdFromRequest, editMode);
+            if(!ObjectUtils.isEmpty(errResponse)){
+                return errResponse;
             }
+
+            email = encryptionService.encryptData(email);
+            Map<String, Object> assessmentHierarchy = readAssessment(assessmentIdFromRequest, editMode);
+
+            hierarchySectionList.addAll((List<Map<String, Object>>) assessmentHierarchy.get(Constants.CHILDREN));
+            sectionListFromSubmitRequest.addAll((List<Map<String, Object>>) submitRequest.get(Constants.CHILDREN));
+
+            if (((String) (assessmentHierarchy.get(Constants.PRIMARY_CATEGORY)))
+                    .equalsIgnoreCase(Constants.PRACTICE_QUESTION_SET) || editMode) {
+
+            } else {
+
+                errMsg = validateSubmitAssessmentRequest(submitRequest, email, contextId, hierarchySectionList,
+                        sectionListFromSubmitRequest, assessmentHierarchy, existingAssessmentData, editMode);
+                if (StringUtils.isNotBlank(errMsg)) {
+                    updateErrorDetails(outgoingResponse, errMsg, HttpStatus.BAD_REQUEST);
+                    return outgoingResponse;
+                }
+            }
+            //Confirm whether the submitted request sections and questions match.
+
             int maxAssessmentRetakeAttempts = (Integer) assessmentHierarchy.get(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS);
-            int retakeAttemptsConsumed = calculateAssessmentRetakeCount(email, assessmentIdFromRequest,contextId);
             String assessmentPrimaryCategory = (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY);
             String assessmentType = ((String) assessmentHierarchy.get(Constants.ASSESSMENT_TYPE)).toLowerCase();
             String scoreCutOffType;
@@ -194,12 +207,15 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                     assessmentStartTime = assessmentStart.getTime();
                 }
                 int minimumPassPercentage=(int) assessmentHierarchy.get(Constants.MINIMUM_PASS_PERCENTAGE);
-                Map<String, Object> result = calculateSectionFinalResults(sectionLevelsResults, assessmentStartTime, assessmentCompletionTime, maxAssessmentRetakeAttempts, retakeAttemptsConsumed,minimumPassPercentage);
-                outgoingResponse.getResult().putAll(result);
-                outgoingResponse.getParams().setStatus(Constants.SUCCESS);
-                outgoingResponse.setResponseCode(HttpStatus.OK);
-                outgoingResponse.getResult().put(Constants.PRIMARY_CATEGORY, assessmentPrimaryCategory);
+                Map<String, Object> result = calculateSectionFinalResults(sectionLevelsResults, assessmentStartTime, assessmentCompletionTime, maxAssessmentRetakeAttempts,minimumPassPercentage);
+
                 if (!Constants.PRACTICE_QUESTION_SET.equalsIgnoreCase(assessmentPrimaryCategory) && !editMode) {
+                    int retakeAttemptsConsumed = calculateAssessmentRetakeCount(email, assessmentIdFromRequest,contextId);
+                    result.put(Constants.RETAKE_ATTEMPT_CONSUMED, retakeAttemptsConsumed);
+                    outgoingResponse.getResult().putAll(result);
+                    outgoingResponse.getParams().setStatus(Constants.SUCCESS);
+                    outgoingResponse.setResponseCode(HttpStatus.OK);
+                    outgoingResponse.getResult().put(Constants.PRIMARY_CATEGORY, assessmentPrimaryCategory);
                     String questionSetFromAssessmentString = (String) existingAssessmentData
                             .get(Constants.ASSESSMENT_READ_RESPONSE_KEY);
                     Map<String, Object> questionSetFromAssessment = null;
@@ -210,6 +226,12 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                     }
                     writeDataToDatabaseAndTriggerKafkaEvent(submitRequest, email, questionSetFromAssessment, result,
                             (String) assessmentHierarchy.get(Constants.PRIMARY_CATEGORY),contextId);
+                }else {
+                    result.put(Constants.RETAKE_ATTEMPT_CONSUMED, 0);
+                    outgoingResponse.getResult().putAll(result);
+                    outgoingResponse.getParams().setStatus(Constants.SUCCESS);
+                    outgoingResponse.setResponseCode(HttpStatus.OK);
+                    outgoingResponse.getResult().put(Constants.PRIMARY_CATEGORY, assessmentPrimaryCategory);
                 }
                 return outgoingResponse;
             }
@@ -252,21 +274,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
 
     private String validateSubmitAssessmentRequest(Map<String, Object> submitRequest, String email, String contextId,
                                                    List<Map<String, Object>> hierarchySectionList, List<Map<String, Object>> sectionListFromSubmitRequest,
-                                                   Map<String, Object> assessmentHierarchy, Map<String, Object> existingAssessmentData, boolean editMode) throws Exception {
-        if (StringUtils.isEmpty((String) submitRequest.get(Constants.IDENTIFIER))) {
-            return Constants.INVALID_ASSESSMENT_ID;
-        }
-        String assessmentIdFromRequest = (String) submitRequest.get(Constants.IDENTIFIER);
-        assessmentHierarchy.putAll(assessUtilServ.readAssessmentHierarchyFromCache(assessmentIdFromRequest, editMode));
-        if (MapUtils.isEmpty(assessmentHierarchy)) {
-            return Constants.READ_ASSESSMENT_FAILED;
-        }
-
-        hierarchySectionList.addAll((List<Map<String, Object>>) assessmentHierarchy.get(Constants.CHILDREN));
-        sectionListFromSubmitRequest.addAll((List<Map<String, Object>>) submitRequest.get(Constants.CHILDREN));
-        if (((String) (assessmentHierarchy.get(Constants.PRIMARY_CATEGORY)))
-                .equalsIgnoreCase(Constants.PRACTICE_QUESTION_SET) || editMode)
-            return "";
+                                                 Map<String, Object> assessmentHierarchy, Map<String, Object> existingAssessmentData, boolean editMode) throws Exception {
 
         List<Map<String, Object>> existingDataList = assessUtilServ.readUserSubmittedAssessmentRecords(
                 email, (String) submitRequest.get(Constants.IDENTIFIER), contextId);
@@ -458,7 +466,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         }
     }
 
-    private Map<String, Object> calculateSectionFinalResults(List<Map<String, Object>> sectionLevelResults, long assessmentStartTime, long assessmentCompletionTime, int maxAssessmentRetakeAttempts, int retakeAttemptsConsumed, int overallPassPercentage) {
+    private Map<String, Object> calculateSectionFinalResults(List<Map<String, Object>> sectionLevelResults, long assessmentStartTime, long assessmentCompletionTime, int maxAssessmentRetakeAttempts, int overallPassPercentage) {
         Map<String, Object> res = new HashMap<>();
         Double result;
         Integer correct = 0;
@@ -498,7 +506,6 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             res.put(Constants.INCORRECT, inCorrect);
             res.put(Constants.TIME_TAKEN_FOR_ASSESSMENT, assessmentCompletionTime - assessmentStartTime);
             res.put(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS, maxAssessmentRetakeAttempts);
-            res.put(Constants.RETAKE_ATTEMPT_CONSUMED, retakeAttemptsConsumed);
             double totalPercentage = (totalSectionMarks / (double) totalMarks) * 100;
             res.put(Constants.PASS, totalPercentage >= overallPassPercentage);
             res.put(Constants.TOTAL_PERCENTAGE, totalPercentage);
@@ -1057,6 +1064,35 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
 
     }
 
+    private SBApiResponse validateSubmitAssessmentPayload(String email, String assessmentIdFromRequest, boolean editMode){
+
+        SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_SUBMIT_ASSESSMENT);
+
+        if (StringUtils.isEmpty(assessmentIdFromRequest)) {
+            updateErrorDetails(response, Constants.INVALID_ASSESSMENT_ID,
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+            return response;
+        }
+
+        Map<String, Object> assessmentHierarchyRead = readAssessment(assessmentIdFromRequest, editMode);
+        //Step-2 : If assessment is empty throw validation error
+        if (MapUtils.isEmpty(assessmentHierarchyRead)) {
+            updateErrorDetails(response, Constants.ASSESSMENT_HIERARCHY_READ_FAILED,
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+            return response;
+        }
+        //Step-3 : If assessment is practice question set send back the response
+        if (Constants.COURSE_ASSESSMENT
+                .equalsIgnoreCase((String) assessmentHierarchyRead.get(Constants.PRIMARY_CATEGORY)) || editMode) {
+
+            if (!ProjectUtil.validateEmailPattern(email)) {
+                updateErrorDetails(response, Constants.INVALID_EMAIL, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+        }
+        return null;
+    }
+  
     @Override
     public SBApiResponse notify(Map<String, Object> request) {
         SBApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_ASSESSMENT_NOTIFY);
