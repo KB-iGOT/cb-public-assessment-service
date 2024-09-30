@@ -1130,7 +1130,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
             mailNotificationDetails.put(Constants.RECIPIENT_EMAILS, Collections.singletonList((String)edata.get(Constants.USER_ID)));
             mailNotificationDetails.put(Constants.COURSE_NAME, edata.get(Constants.COURSE_NAME));
             mailNotificationDetails.put(Constants.COURSE_POSTER_IMAGE_URL, edata.get(Constants.COURSE_POSTER_IMAGE));
-            mailNotificationDetails.put(Constants.SUBJECT,"Completion certificate");
+            mailNotificationDetails.put(Constants.SUBJECT,Constants.COURSE_COMPLETION_SUBJECT);
             sendAssessmentNotification(mailNotificationDetails);
             logger.info("assessment notification sent successfully");
         }catch (Exception e){
@@ -1147,7 +1147,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
         params.put(Constants.COURSE_NAME, mailNotificationDetails.get(Constants.COURSE_NAME));
         params.put(Constants.COURSE_POSTER_IMAGE_KEY, mailNotificationDetails.get(Constants.COURSE_POSTER_IMAGE_URL));
         //params.put(Constants.CERTIFICATE_LINK, mailNotificationDetails.get(Constants.CERTIFICATE_LINK));
-        Template template = new Template(constructEmailTemplate(serverProperties.getPublicAssessmentCertificateTemplate(), params), serverProperties.getPublicAssessmentCertificateTemplate(), params);
+        Template template = new Template(constructEmailTemplate(serverProperties.getPublicAssessmentCompletionTemplate(), params), serverProperties.getPublicAssessmentCompletionTemplate(), params);
         usermap.put(Constants.ID, "");
         usermap.put(Constants.TYPE, Constants.USER);
         action.put(Constants.TEMPLATE, templ);

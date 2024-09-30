@@ -111,6 +111,9 @@ public class ServerProperties {
 	@Value("${kafka.topic.certificate.request}")
 	private String kafkaTopicCertificateRequest;
 
+	@Value("{public.assessment.completion.template}")
+	private String publicAssessmentCompletionTemplate;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -359,5 +362,13 @@ public class ServerProperties {
 
 	public void setKafkaTopicCertificateRequest(String kafkaTopicCertificateRequest) {
 		this.kafkaTopicCertificateRequest = kafkaTopicCertificateRequest;
+	}
+
+	public String getPublicAssessmentCompletionTemplate() {
+		return publicAssessmentCompletionTemplate;
+	}
+
+	public void setPublicAssessmentCompletionTemplate(String publicAssessmentCompletionTemplate) {
+		this.publicAssessmentCompletionTemplate = publicAssessmentCompletionTemplate;
 	}
 }
