@@ -93,6 +93,18 @@ public class ServerProperties {
 	@Value("${assessment.primarykey.notallowed.certificate}")
 	private String assessmentPrimaryKeyNotAllowedCertificate;
 
+	@Value("${notify.service.host}")
+	private String notifyServiceHost;
+
+	@Value("${notify.service.path.async}")
+	private String notifyServicePathAsync;
+
+	@Value("${notification.support.mail}")
+	private String supportEmail;
+
+	@Value("${public.assessment.certificate.template}")
+	private String publicAssessmentCertificateTemplate;
+
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
 	}
@@ -308,4 +320,23 @@ public class ServerProperties {
 	public void setAssessmentPrimaryKeyNotAllowedCertificate(String assessmentPrimaryKeyNotAllowedCertificate) {
 		this.assessmentPrimaryKeyNotAllowedCertificate = assessmentPrimaryKeyNotAllowedCertificate;
 	}
+
+	public String getNotifyServiceHost() { return notifyServiceHost; }
+
+	public void setNotifyServiceHost(String notifyServiceHost) { this.notifyServiceHost = notifyServiceHost; }
+
+	public String getNotifyServicePathAsync() { return notifyServicePathAsync; }
+
+	public void setNotifyServicePathAsync(String notifyServicePathAsync) { this.notifyServicePathAsync = notifyServicePathAsync;}
+
+	public String getSupportEmail() { return supportEmail; }
+
+	public void setSupportEmail(String supportEmail) { this.supportEmail = supportEmail; }
+
+	public String getPublicAssessmentCertificateTemplate() { return publicAssessmentCertificateTemplate; }
+
+	public void setPublicAssessmentCertificateTemplate(String publicAssessmentCertificateTemplate) {
+		this.publicAssessmentCertificateTemplate = publicAssessmentCertificateTemplate;
+	}
+
 }

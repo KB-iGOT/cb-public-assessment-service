@@ -78,4 +78,10 @@ public class AssessmentController {
         SBApiResponse response = assessmentServiceV5.readAssessmentResultV5(requestBody);
         return new ResponseEntity<>(response, response.getResponseCode());
     }
+
+    @PostMapping("/assessment/notify")
+    public ResponseEntity<SBApiResponse> notify(@RequestBody Map<String, Object> request) {
+        SBApiResponse response = assessmentServiceV5.notify(request);
+        return new ResponseEntity<>(response, response.getResponseCode());
+    }
 }
