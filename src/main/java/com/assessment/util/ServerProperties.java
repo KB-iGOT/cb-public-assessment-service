@@ -122,6 +122,8 @@ public class ServerProperties {
 
 	@Value("${public.assessment.cert.generation.post.process.topic}")
 	private String publicAssessmentCertGenerationPostProcessTopic;
+	@Value("${storage.cloud.url}")
+	private String cloudStorageUrl;
 
 	public String getAssessmentQuestionListPath() {
 		return assessmentQuestionListPath;
@@ -404,6 +406,13 @@ public class ServerProperties {
 
 	public void setPublicAssessmentCertGenerationPostProcessTopic(String publicAssessmentCertGenerationPostProcessTopic) {
 		this.publicAssessmentCertGenerationPostProcessTopic = publicAssessmentCertGenerationPostProcessTopic;
+	}
 
+	public String getCloudStorageUrl() {
+		return cloudStorageUrl;
+	}
+
+	public void setCloudStorageUrl(String cloudStorageUrl) {
+		this.cloudStorageUrl = cloudStorageUrl;
 	}
 }

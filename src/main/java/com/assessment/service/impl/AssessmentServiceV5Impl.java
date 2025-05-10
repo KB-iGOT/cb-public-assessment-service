@@ -1365,7 +1365,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
     public void processDownloadNotification(Map<String, Object> notificationRequest) {
         try {
            String userId = (String) notificationRequest.get("userid");
-            String contextId = (String) notificationRequest.get("courseid");
+            String contextId = (String) (notificationRequest.get("courseid") != null ? notificationRequest.get("courseid") : notificationRequest.get("contextid"));
             String assessmentId = (String) notificationRequest.get("assessmentid");
             Map<String, Object> propertyMap = new HashMap<>();
             String encryptedEmail= encryptionService.encryptData(userId );
@@ -1377,6 +1377,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 logger.info("");
             }else {
                 String certificateUrl = (String)cassandraResponse.get(0).get("cert_publicurl");
+                if(certificateUrl.contains(serverProperties.getCloudStorageUrl())){
+                    certificateUrl = certificateUrl.replace(serverProperties.getCloudStorageUrl(),"");
+                }
                 String linkUrl = serverProperties.getPublicAccessUrl()+certificateUrl;
 
                 Map<String, Object> hierachyMap = new HashMap<>();
@@ -1389,9 +1392,9 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
                 String coursePosterImage = (String) contentHierarchyObj.get(Constants.POSTER_IMAGE);
 
                 Map<String, Object> notificationData = new HashMap<>();
-                notificationData.put(Constants.USER_ID,Collections.singletonList(userId));
+                notificationData.put(Constants.RECIPIENT_EMAILS,Collections.singletonList(userId));
                 notificationData.put(Constants.COURSE_NAME, courseName);
-                notificationData.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
+                notificationData.put(Constants.COURSE_POSTER_IMAGE_URL, coursePosterImage);
                 notificationData.put(Constants.CERTIFICATE_LINK, linkUrl);
                 notificationData.put(Constants.SUBJECT,Constants.COURSE_COMPLETE_SUBJECT);
                 sendAssessmentNotification(notificationData,serverProperties.getPublicAssessmentCertificateTemplate(),true);
