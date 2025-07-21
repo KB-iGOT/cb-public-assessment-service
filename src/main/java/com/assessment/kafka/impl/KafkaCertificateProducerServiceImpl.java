@@ -2,6 +2,7 @@ package com.assessment.kafka.impl;
 
 import com.assessment.kafka.Producer;
 import com.assessment.kafka.service.KafkaCertificateProducerService;
+import com.assessment.util.Constants;
 import com.assessment.util.ServerProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -87,27 +88,27 @@ public class KafkaCertificateProducerServiceImpl implements KafkaCertificateProd
         log.debug("KafkaConsumer :: getReplacementValue");
         switch (placeholder) {
             case "user.id":
-                return (String) certificateRequest.get("userid");
+                return (String) certificateRequest.get(Constants.USER_ID);
             case "course.id":
-                return (String) certificateRequest.get("courseid");
+                return (String) certificateRequest.get(Constants.COURSE_ID);
             case "today.date":
-                return (String) certificateRequest.get("completionDate");
+                return (String) certificateRequest.get(Constants.COMPLETION_DATE);
             case "time.ms":
                 return String.valueOf(System.currentTimeMillis());
             case "unique.id":
                 return UUID.randomUUID().toString();
             case "course.name":
-                return (String) certificateRequest.get("courseName");
+                return (String) certificateRequest.get(Constants.COURSE_NAME);
             case "provider.name":
-                return (String) certificateRequest.get("providerName");
+                return (String) certificateRequest.get(Constants.PROVIDER_NAME);
             case "user.name":
-                return (String) certificateRequest.get("recipientName");
+                return (String) certificateRequest.get(Constants.RECIPIENT_NAME);
             case "course.poster.image":
-                return (String) certificateRequest.get("coursePosterImage");
+                return (String) certificateRequest.get(Constants.COURSE_POSTER_IMAGE);
             case "svgTemplate":
                 return serverProperties.getSvgTemplate();
             case "assessment.id":
-                return (String) certificateRequest.get("assessmentId");
+                return (String) certificateRequest.get(Constants.ASSESSMENT_ID_KEY);
             default:
                 return "";
         }

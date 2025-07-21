@@ -79,9 +79,10 @@ public class AssessmentController {
         return new ResponseEntity<>(response, response.getResponseCode());
     }
 
-    @PostMapping("/assessment/notify")
-    public ResponseEntity<SBApiResponse> notify(@RequestBody Map<String, Object> request) {
-        SBApiResponse response = assessmentServiceV5.notify(request);
-        return new ResponseEntity<>(response, response.getResponseCode());
+    @PostMapping("/v5/public/user/assessment/certificate/reissue")
+    public ResponseEntity<SBApiResponse> assessmentCertificateReissue(@Valid @RequestBody Map<String, Object> requestBody) {
+        SBApiResponse readResponse = assessmentServiceV5.assessmentCertificateReissue(requestBody);
+        return new ResponseEntity<>(readResponse, readResponse.getResponseCode());
     }
+
 }

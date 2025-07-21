@@ -59,10 +59,12 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             poolingOptions
                     .setHeartbeatIntervalSeconds(Integer.parseInt(cache.getProperty(Constants.HEARTBEAT_INTERVAL)));
             poolingOptions.setPoolTimeoutMillis(Integer.parseInt(cache.getProperty(Constants.POOL_TIMEOUT)));
-            String cassandraHost = cache.getProperty(Constants.CASSANDRA_CONFIG_HOST);
-            String[] hosts = new String[] { cassandraHost };
+            String cassandraHost = (cache.getProperty(Constants.CASSANDRA_CONFIG_HOST));
+            String[] hosts = null;
+            if (!StringUtils.isEmpty(cassandraHost)) {
+                hosts = cassandraHost.split(",");
+            }
             cluster = createCluster(hosts, poolingOptions);
-
             final Metadata metadata = cluster.getMetadata();
             String msg = String.format("Connected to cluster: %s", metadata.getClusterName());
             logger.info(msg);

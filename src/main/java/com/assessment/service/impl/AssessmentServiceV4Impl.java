@@ -355,8 +355,7 @@ public class AssessmentServiceV4Impl implements AssessmentServiceV4 {
                     certificateRequest.put(Constants.COURSE_POSTER_IMAGE, coursePosterImage);
                     certificateRequest.put(Constants.RECIPIENT_NAME, recipientName);
                     kafkaCertificateProducerService.replacePlaceholders(jsonNode, certificateRequest);
-                    String jsonNodeStr = mapper.writeValueAsString(jsonNode);
-                    producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNodeStr);
+                    producer.push(serverProperties.getKafkaTopicsPublicAssessmentCertificate(), jsonNode);
 
                 }
             }
