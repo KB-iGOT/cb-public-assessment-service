@@ -38,17 +38,10 @@ public class PropertiesCache {
         }
     }
 
-    public static PropertiesCache getInstance() {
-
-        // change the lazy holder implementation to simple singleton implementation ...
-        if (null == propertiesCache) {
-            synchronized (PropertiesCache.class) {
-                if (null == propertiesCache) {
-                    propertiesCache = new PropertiesCache();
-                }
-            }
+    public static synchronized PropertiesCache getInstance() {
+        if (propertiesCache == null) {
+            propertiesCache = new PropertiesCache();
         }
-
         return propertiesCache;
     }
 

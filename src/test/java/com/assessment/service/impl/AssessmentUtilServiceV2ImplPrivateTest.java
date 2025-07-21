@@ -5,10 +5,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.assessment.util.Constants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.stream.Stream;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AssessmentUtilServiceV2ImplPrivateTest {
 
     private AssessmentUtilServiceV2Impl service;
@@ -64,58 +70,27 @@ class AssessmentUtilServiceV2ImplPrivateTest {
         assertTrue(result.isEmpty());
     }
 
-    @Test
-    void test_calculateScoreForOptionWeightage_matchesOption() throws Exception {
+    @ParameterizedTest
+    @MethodSource("provideTestCases")
+    void test_calculateScoreForOptionWeightage(
+            String assessmentType,
+            List<String> marked,
+            Double expected
+    ) throws Exception {
         Method method = getPrivateMethod();
 
         Map<String, Object> question = Map.of("identifier", "q1");
-        String assessmentType = "OPTION_WEIGHTAGE";
 
         Map<String, Object> optionWeightageForQ1 = Map.of("1", 2, "2", 4);
         Map<String, Object> optionWeightages = Map.of("q1", optionWeightageForQ1);
 
         Double sectionMarks = 5.0;
-        List<String> marked = List.of("2");
 
-        Double result = (Double) method.invoke(null, question, assessmentType, optionWeightages, sectionMarks, marked);
+        Double result = (Double) method.invoke(
+                service, question, assessmentType, optionWeightages, sectionMarks, marked
+        );
 
-        assertEquals(5.0, result);
-    }
-
-    @Test
-    void test_calculateScoreForOptionWeightage_noMatch() throws Exception {
-        Method method = getPrivateMethod();
-
-        Map<String, Object> question = Map.of("identifier", "q1");
-        String assessmentType = "OPTION_WEIGHTAGE";
-
-        Map<String, Object> optionWeightageForQ1 = Map.of("1", 2, "2", 4);
-        Map<String, Object> optionWeightages = Map.of("q1", optionWeightageForQ1);
-
-        Double sectionMarks = 5.0;
-        List<String> marked = List.of("3");
-
-        Double result = (Double) method.invoke(null, question, assessmentType, optionWeightages, sectionMarks, marked);
-
-        assertEquals(5.0, result);
-    }
-
-    @Test
-    void test_calculateScoreForOptionWeightage_wrongAssessmentType() throws Exception {
-        Method method = getPrivateMethod();
-
-        Map<String, Object> question = Map.of("identifier", "q1");
-        String assessmentType = "SOME_OTHER_TYPE";
-
-        Map<String, Object> optionWeightageForQ1 = Map.of("1", 2, "2", 4);
-        Map<String, Object> optionWeightages = Map.of("q1", optionWeightageForQ1);
-
-        Double sectionMarks = 5.0;
-        List<String> marked = List.of("1");
-
-        Double result = (Double) method.invoke(null, question, assessmentType, optionWeightages, sectionMarks, marked);
-
-        assertEquals(5.0, result);
+        assertEquals(expected, result);
     }
 
     @Test
@@ -241,52 +216,22 @@ class AssessmentUtilServiceV2ImplPrivateTest {
         assertEquals(10.0, result);
     }
 
-    @Test
-    void test_computeSectionResults_passCase() throws Exception {
 
-
-        Double sectionMarks = 8.0;
-        Integer totalMarks = 10;
-        int minimumPassValue = 50;
-
-        Map<String, Object> resultMap = new HashMap<>();
-
-        Method method = getMethodComputeSectionResults();
-        method.invoke(service, sectionMarks, totalMarks, minimumPassValue, resultMap);
-
-        assertEquals("pass", resultMap.get("sectionResult"));
-    }
-
-    @Test
-    void test_computeSectionResults_failCase_dueToLowMarks() throws Exception {
-
-
-        Double sectionMarks = 3.0;
-        Integer totalMarks = 10;
-        int minimumPassValue = 50;
+    @ParameterizedTest
+    @MethodSource("provideSectionResultCases")
+    void test_computeSectionResults(
+            Double sectionMarks,
+            Integer totalMarks,
+            int minimumPassValue,
+            String expectedResult
+    ) throws Exception {
 
         Map<String, Object> resultMap = new HashMap<>();
 
         Method method = getMethodComputeSectionResults();
         method.invoke(service, sectionMarks, totalMarks, minimumPassValue, resultMap);
 
-        assertEquals("fail", resultMap.get("sectionResult"));
-    }
-
-    @Test
-    void test_computeSectionResults_failCase_dueToZeroMarks() throws Exception {
-
-
-        Double sectionMarks = 0.0;
-        Integer totalMarks = 10;
-        int minimumPassValue = 50;
-
-        Map<String, Object> resultMap = new HashMap<>();
-
-        Method method = getMethodComputeSectionResults();
-        method.invoke(service, sectionMarks, totalMarks, minimumPassValue, resultMap);
-
-        assertEquals("fail", resultMap.get("sectionResult"));
+        assertEquals(expectedResult, resultMap.get("sectionResult"));
     }
 
     @Test
@@ -550,10 +495,21 @@ class AssessmentUtilServiceV2ImplPrivateTest {
     }
 
 
-    private Method getMethodComputeSectionResults() throws NoSuchMethodException {
-        Method method = AssessmentUtilServiceV2Impl.class.getDeclaredMethod("computeSectionResults", Double.class, Integer.class, int.class, Map.class);
+    private Method getMethodComputeSectionResults() throws Exception {
+        Method method = AssessmentUtilServiceV2Impl.class.getDeclaredMethod(
+                "computeSectionResults",
+                Double.class, Integer.class, int.class, Map.class
+        );
         method.setAccessible(true);
         return method;
+    }
+
+    private Stream<Arguments> provideSectionResultCases() {
+        return Stream.of(
+                Arguments.of(8.0, 10, 50, "pass"),   // >50%
+                Arguments.of(3.0, 10, 50, "fail"),  // <50%
+                Arguments.of(0.0, 10, 50, "fail")   // 0 marks
+        );
     }
 
     private Method getMethodhandleIncorrectAnswer() throws NoSuchMethodException {
@@ -580,10 +536,21 @@ class AssessmentUtilServiceV2ImplPrivateTest {
         return method;
     }
 
-    private Method getPrivateMethod() throws NoSuchMethodException {
-        Method method = AssessmentUtilServiceV2Impl.class.getDeclaredMethod("calculateScoreForOptionWeightage", Map.class, String.class, Map.class, Double.class, List.class);
+    private Method getPrivateMethod() throws Exception {
+        Method method = AssessmentUtilServiceV2Impl.class.getDeclaredMethod(
+                "calculateScoreForOptionWeightage",
+                Map.class, String.class, Map.class, Double.class, List.class
+        );
         method.setAccessible(true);
         return method;
+    }
+
+    private Stream<Arguments> provideTestCases() {
+        return Stream.of(
+                Arguments.of("OPTION_WEIGHTAGE", List.of("2"), 5.0),
+                Arguments.of("OPTION_WEIGHTAGE", List.of("3"), 5.0),
+                Arguments.of("SOME_OTHER_TYPE", List.of("1"), 5.0)
+        );
     }
 }
 
