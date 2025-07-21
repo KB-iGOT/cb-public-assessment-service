@@ -61,9 +61,9 @@ public interface DataMaskingService {
    */
   default String maskOTP(String otp) {
     if (otp.length() >= 6) {
-      return otp.replaceAll("((^[^*]{4})|((?!^)\\G))[^*]", "$1*");
+      return otp.replaceAll("(^[^*]{4}|(?!^)\\G)[^*]", "$1*");
     } else {
-      return otp.replaceAll("((^[^*]{2})|((?!^)\\G))[^*]", "$1*");
+      return otp.replaceAll("(^[^*]{2}|(?!^)\\G)[^*]", "$1*");
     }
   }
 }
