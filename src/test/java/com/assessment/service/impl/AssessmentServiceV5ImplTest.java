@@ -859,8 +859,7 @@ class AssessmentServiceV5ImplTest {
 
         when(mapper.writeValueAsString(any())).thenReturn("{}");
 
-        service.processNotification(request);
-        // no exception thrown, logs the error
+        assertDoesNotThrow(() -> service.processNotification(request));
     }
 
     @Test
@@ -870,7 +869,7 @@ class AssessmentServiceV5ImplTest {
 
         when(mapper.writeValueAsString(any())).thenReturn("{}");
 
-        service.processNotification(request);
+        assertDoesNotThrow(() -> service.processNotification(request));
     }
 
     @Test
@@ -881,7 +880,7 @@ class AssessmentServiceV5ImplTest {
 
         when(mapper.writeValueAsString(any())).thenReturn("{}");
 
-        service.processNotification(request);
+        assertDoesNotThrow(() -> service.processNotification(request));
     }
 
     @Test
@@ -892,7 +891,7 @@ class AssessmentServiceV5ImplTest {
         when(cassandraOperation.getRecordsByProperties(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Template DB error"));
 
-        service.processNotification(request);
+        assertDoesNotThrow(() -> service.processNotification(request));
     }
 
     @Test
@@ -906,7 +905,7 @@ class AssessmentServiceV5ImplTest {
         when(cassandraOperation.getRecordsByProperties(any(), any(), any(), any()))
                 .thenReturn(List.of(Map.of(Constants.TEMPLATE, "<html>${COURSE_NAME}</html>")));
 
-        service.processNotification(request);
+        assertDoesNotThrow(() -> service.processNotification(request));
     }
 
     @Test
