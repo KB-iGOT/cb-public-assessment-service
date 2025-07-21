@@ -295,8 +295,8 @@
                 <version>0.8.8</version>
                 <configuration>
                     <includes>
-                        <include>com/igot/cb/*</include>
-                        <include>com/igot/cb/**/*</include>
+                        <include>com/assessment/*</include>
+                        <include>com/assessment/**/*</include>
                     </includes>
                     <rules>
                         <rule>
