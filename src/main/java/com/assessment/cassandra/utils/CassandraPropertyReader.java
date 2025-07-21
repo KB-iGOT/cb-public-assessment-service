@@ -27,18 +27,23 @@ public class CassandraPropertyReader {
 	    }
 	  }
 
-	public static synchronized CassandraPropertyReader getInstance() {
-		if (cassandraPropertyReader == null) {
-			try {
+	  public static CassandraPropertyReader getInstance() {
+	    if (null == cassandraPropertyReader) {
+	      synchronized (CassandraPropertyReader.class) {
+	        if (null == cassandraPropertyReader) {
+	          try {
 				cassandraPropertyReader = new CassandraPropertyReader();
 			} catch (IOException e) {
+				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-		}
-		return cassandraPropertyReader;
-	}
+	        }
+	      }
+	    }
+	    return cassandraPropertyReader;
+	  }
 
-	/**
+	  /**
 	   * Method to read value from resource file .
 	   *
 	   * @param key property value to read
