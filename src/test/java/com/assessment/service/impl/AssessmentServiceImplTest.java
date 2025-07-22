@@ -11,6 +11,7 @@ import com.assessment.util.Constants;
 import com.assessment.util.ServerProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
@@ -227,6 +228,68 @@ class AssessmentServiceImplTest {
 
         assertEquals(HttpStatus.OK, res.getResponseCode());
         assertEquals("User has already submitted the assessment",res.getResult().get("response"));
+    }
+
+    @Test
+    void testReadAssessment_InternalServerError() {
+        Map<String, Object> req = createRequest();
+        Map<String, Object> assessment = createAssessmentDetail(true);
+        assessment.put(Constants.PRIMARY_CATEGORY, "Question Set");
+
+
+        when(encryptionService.encryptData(any())).thenReturn("encrypted");
+        when(utilService.readAssessmentHierarchyFromCache(any(), anyBoolean()))
+                .thenReturn(assessment);
+
+        Map<String, Object> existing = new HashMap<>();
+        existing.put(Constants.END_TIME, new Date());
+        existing.put(Constants.STATUS, Constants.SUBMITTED);
+        existing.put(Constants.PASS_STATUS, true);
+        when(utilService.readUserSubmittedAssessmentRecords(any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        SBApiResponse res = service.readAssessment(false, req);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, res.getResponseCode());
+        assertEquals("Assessment Data & Start Time not updated in the DB.",res.getParams().getErrmsg());
+    }
+
+    @Test
+    void testReadAssessment_Existing_NotSubmitted_AndWithinTime() {
+        Map<String, Object> req = createRequest();
+        Map<String, Object> assessment = createAssessmentDetail(true);
+        assessment.put(Constants.PRIMARY_CATEGORY, "Question Set");
+
+        when(encryptionService.encryptData(any())).thenReturn("encrypted");
+        when(utilService.readAssessmentHierarchyFromCache(any(), anyBoolean()))
+                .thenReturn(assessment);
+
+        // existing record with END_TIME > now, STATUS == NOT_SUBMITTED
+        Map<String, Object> existing = new HashMap<>();
+        existing.put(Constants.END_TIME, new Date(System.currentTimeMillis() + 30_000));  // 30 sec in future
+        existing.put(Constants.STATUS, Constants.NOT_SUBMITTED);
+
+        // prepare a JSON string representing saved question set
+        Map<String, Object> savedQSet = new HashMap<>();
+        savedQSet.put("dummyKey", "dummyValue");
+        String savedQSetJson = new Gson().toJson(savedQSet);
+        existing.put(Constants.ASSESSMENT_READ_RESPONSE_KEY, savedQSetJson);
+
+        when(utilService.readUserSubmittedAssessmentRecords(any(), any(), any()))
+                .thenReturn(List.of(existing));
+
+        SBApiResponse res = service.readAssessment(false, req);
+
+        assertEquals(HttpStatus.OK, res.getResponseCode());
+
+        // Assert the response contains the updated QUESTION_SET
+        Map<String, Object> questionSet =
+                (Map<String, Object>) res.getResult().get(Constants.QUESTION_SET);
+
+        assertNotNull(questionSet);
+        assertEquals("dummyValue", questionSet.get("dummyKey"));
+        assertTrue(questionSet.containsKey(Constants.START_TIME));
+        assertTrue(questionSet.containsKey(Constants.END_TIME));
     }
 
     @Test

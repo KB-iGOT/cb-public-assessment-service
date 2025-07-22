@@ -68,6 +68,63 @@ class AssessmentUtilServiceV2ImplTest {
     }
 
     @Test
+    void validateQumlAssessment_AllCorrectWithMTF() {
+        List<String> originalQuestionList = List.of("q1");
+        Map<String, Object> questionMap = new HashMap<>();
+        Map<String, Object> editorState = new HashMap<>();
+        Map<String, Object> option = new HashMap<>();
+        option.put(Constants.SELECTED_ANSWER, true);
+        option.put(Constants.INDEX, "A");
+        option.put(Constants.ANSWER, true);
+        option.put(Constants.VALUE, Map.of(Constants.VALUE, "A"));
+        editorState.put(Constants.OPTIONS, List.of(option));
+        Map<String, Object> question = new HashMap<>();
+        question.put(Constants.IDENTIFIER, "q1");
+        question.put(Constants.QUESTION_TYPE, Constants.MTF);
+        question.put(Constants.EDITOR_STATE, editorState);
+        questionMap.put("q1", question);
+
+        List<Map<String, Object>> userQuestionList = List.of(new HashMap<>(question));
+        userQuestionList.get(0).put(Constants.EDITOR_STATE, editorState);
+
+        Map<String, Object> result = service.validateQumlAssessment(originalQuestionList, userQuestionList, questionMap);
+
+        assertEquals(1, result.get(Constants.CORRECT));
+        assertEquals(0, result.get(Constants.INCORRECT));
+        assertEquals(0, result.get(Constants.BLANK));
+        assertEquals(1, result.get(Constants.TOTAL));
+    }
+
+    @Test
+    void validateQumlAssessment_AllCorrectWithFTB() {
+        List<String> originalQuestionList = List.of("q1");
+        Map<String, Object> questionMap = new HashMap<>();
+        Map<String, Object> editorState = new HashMap<>();
+        Map<String, Object> option = new HashMap<>();
+        Map<String, Object> valueObject = new HashMap<>();
+        valueObject.put(Constants.VALUE, "A");
+        valueObject.put("body", "");
+        option.put(Constants.SELECTED_ANSWER, true);
+        option.put(Constants.INDEX, "A");
+        option.put(Constants.ANSWER, true);
+        option.put(Constants.VALUE, valueObject);
+        editorState.put(Constants.OPTIONS, List.of(option));
+        Map<String, Object> question = new HashMap<>();
+        question.put(Constants.IDENTIFIER, "q1");
+        question.put(Constants.QUESTION_TYPE, Constants.FTB);
+        question.put(Constants.EDITOR_STATE, editorState);
+        questionMap.put("q1", question);
+
+        List<Map<String, Object>> userQuestionList = List.of(new HashMap<>(question));
+        userQuestionList.get(0).put(Constants.EDITOR_STATE, editorState);
+
+        Map<String, Object> result = service.validateQumlAssessment(originalQuestionList, userQuestionList, questionMap);
+
+        assertNotNull(result);
+    }
+
+
+    @Test
     void validateQumlAssessment_BlankAnswer() {
         List<String> originalQuestionList = List.of("q1");
         Map<String, Object> questionMap = new HashMap<>();
