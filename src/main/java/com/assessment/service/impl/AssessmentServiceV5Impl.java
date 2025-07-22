@@ -1276,7 +1276,7 @@ public class AssessmentServiceV5Impl implements AssessmentServiceV5 {
 
             String encryptedEmail = encryptionService.encryptData(email);
             List<Map<String, Object>> submitedAssessmentDetails = assessmentRepository.fetchUserAssessmentDataFromDB(encryptedEmail, assessmentId);
-            if (CollectionUtils.isEmpty(submitedAssessmentDetails)) {
+            if (CollectionUtils.isNotEmpty(submitedAssessmentDetails)) {
                 String recipientName = (String) submitedAssessmentDetails.get(0).get(Constants.NAME);
                 Boolean passStatus = (Boolean) submitedAssessmentDetails.get(0).get(Constants.PASS_STATUS);
 

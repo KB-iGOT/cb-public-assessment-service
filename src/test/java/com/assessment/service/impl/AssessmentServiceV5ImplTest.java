@@ -14,6 +14,7 @@ import com.assessment.repo.AssessmentRepository;
 import com.assessment.service.AssessmentUtilServiceV2;
 import com.assessment.service.OutboundRequestHandlerServiceImpl;
 import com.assessment.util.Constants;
+import com.assessment.util.ProjectUtil;
 import com.assessment.util.ServerProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1064,6 +1065,147 @@ class AssessmentServiceV5ImplTest {
 
         // Should catch and log exception
         verifyNoInteractions(outboundRequestHandlerService);
+    }
+
+    @Test
+    void testAssessmentCertificateReissue_Failed() {
+        Map<String, Object> request = new HashMap<>();
+        request.put("email", "valid.email@test.com");
+        request.put(Constants.ASSESSMENT_IDENTIFIER, "aid");
+        request.put("contextId", "cid");
+
+        // use the real implementation of validateEmailPattern
+        assertTrue(ProjectUtil.validateEmailPattern((String) request.get("email")));
+
+        when(encryptionService.encryptData(anyString())).thenReturn("encrypted");
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "John Doe");
+        data.put("passStatus", true);
+        data.put("issuedCertificate", List.of(Map.of("cert", "xyz"))); // triggers Kafka cert reissue
+
+        when(assessmentRepository.fetchUserAssessmentDataFromDB(any(), any())).thenReturn(List.of(data));
+
+        doNothing().when(producer).push(anyString(), any());
+
+        var response = service.assessmentCertificateReissue(request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals("User assessment did not pass.", response.getParams().getErrmsg());
+    }
+
+    @Test
+    void testAssessmentCertificateReissue_FailedDataNotFound() {
+        Map<String, Object> request = new HashMap<>();
+        request.put("email", "valid.email@test.com");
+        request.put(Constants.ASSESSMENT_IDENTIFIER, "aid");
+        request.put("contextId", "cid");
+
+        // use the real implementation of validateEmailPattern
+        assertTrue(ProjectUtil.validateEmailPattern((String) request.get("email")));
+
+        when(encryptionService.encryptData(anyString())).thenReturn("encrypted");
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "John Doe");
+        data.put("passStatus", true);
+        data.put("issuedCertificate", List.of(Map.of("cert", "xyz"))); // triggers Kafka cert reissue
+
+        when(assessmentRepository.fetchUserAssessmentDataFromDB(any(), any())).thenReturn(Collections.emptyList());
+
+        doNothing().when(producer).push(anyString(), any());
+
+        var response = service.assessmentCertificateReissue(request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals("User assessment data is not available", response.getParams().getErrmsg());
+    }
+
+    @Test
+    void testAssessmentCertificateReissue() {
+        Map<String, Object> request = new HashMap<>();
+        request.put("email", "valid.email@test.com");
+        request.put(Constants.ASSESSMENT_IDENTIFIER, "aid");
+        request.put("contextId", "cid");
+
+        // use the real implementation of validateEmailPattern
+        assertTrue(ProjectUtil.validateEmailPattern((String) request.get("email")));
+
+        when(encryptionService.encryptData(anyString())).thenReturn("encrypted");
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "John Doe");
+        data.put(Constants.PASS_STATUS, true);
+        data.put("issuedCertificate", List.of(Map.of("cert", "xyz"))); // triggers Kafka cert reissue
+
+        when(assessmentRepository.fetchUserAssessmentDataFromDB(any(), any())).thenReturn(List.of(data));
+
+        doNothing().when(producer).push(anyString(), any());
+
+        var response = service.assessmentCertificateReissue(request);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals("success", response.getParams().getStatus());
+    }
+
+    @Test
+    void testAssessmentCertificateReissue_1() {
+        Map<String, Object> request = new HashMap<>();
+        request.put("email", "valid.email@test.com");
+        request.put(Constants.ASSESSMENT_IDENTIFIER, "aid");
+        request.put("contextId", "cid");
+
+        // use the real implementation of validateEmailPattern
+        assertTrue(ProjectUtil.validateEmailPattern((String) request.get("email")));
+
+        when(encryptionService.encryptData(anyString())).thenReturn("encrypted");
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "John Doe");
+        data.put(Constants.PASS_STATUS, true);
+        data.put("issuedCertificate", List.of(Map.of("cert", "xyz")));
+        data.put(Constants.CERT_PUBLIC_URL,"aab");
+
+        when(assessmentRepository.fetchUserAssessmentDataFromDB(any(), any())).thenReturn(List.of(data));
+
+        doNothing().when(producer).push(anyString(), any());
+
+        var response = service.assessmentCertificateReissue(request);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals("success", response.getParams().getStatus());
+    }
+
+    @Test
+    void testCreateResponseMapWithEmptyResultMap_setsResultZero() {
+        Map<String, Object> hierarchySection = new HashMap<>();
+        hierarchySection.put(Constants.IDENTIFIER, "section1");
+        hierarchySection.put(Constants.OBJECT_TYPE, "type1");
+        hierarchySection.put(Constants.PRIMARY_CATEGORY, "category1");
+        hierarchySection.put(Constants.MINIMUM_PASS_PERCENTAGE, 50);
+        hierarchySection.put(Constants.NAME, "Section Name");
+        hierarchySection.put(Constants.CHILDREN, Arrays.asList("q1", "q2", "q3"));
+
+        Map<String, Object> resultMap = Collections.emptyMap();
+
+        Map<String, Object> result = service.createResponseMapWithProperStructure(hierarchySection, resultMap);
+
+        assertNotNull(result);
+        assertEquals("section1", result.get(Constants.IDENTIFIER));
+        assertEquals("type1", result.get(Constants.OBJECT_TYPE));
+        assertEquals("category1", result.get(Constants.PRIMARY_CATEGORY));
+        assertEquals(50, result.get(Constants.PASS_PERCENTAGE));
+        assertEquals("Section Name", result.get(Constants.NAME));
+
+        assertEquals(0.0, result.get(Constants.RESULT));
+        assertEquals(3, result.get(Constants.TOTAL));  // size of childNodes
+        assertEquals(3, result.get(Constants.BLANK));
+        assertEquals(0, result.get(Constants.CORRECT));
+        assertEquals(0, result.get(Constants.INCORRECT));
+
+        // PASS is false because result=0 < min pass percentage
+        assertEquals(false, result.get(Constants.PASS));
+        assertEquals(0.0, result.get(Constants.OVERALL_RESULT));
     }
 
     private Map<String, Object> downloadNotificationValidRequest() {

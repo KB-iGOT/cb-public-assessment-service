@@ -5,6 +5,7 @@ import com.assessment.datasecurity.DecryptionService;
 import com.assessment.kafka.Producer;
 import com.assessment.kafka.service.KafkaCertificateProducerService;
 import com.assessment.repo.AssessmentRepository;
+import com.assessment.util.Constants;
 import com.assessment.util.ServerProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -287,6 +288,7 @@ class AssessmentServiceV5ImplMethodTest {
 
         Method method = AssessmentServiceV5Impl.class.getDeclaredMethod(
                 "sendMessageToKafkaForCertificate",
+
                 Map.class, String.class, String.class, String.class);
         method.setAccessible(true);
 
@@ -301,7 +303,6 @@ class AssessmentServiceV5ImplMethodTest {
         );
         when(service.cassandraOperation.getRecordsByProperties(any(), any(), any(), isNull()))
                 .thenReturn(hierarchyData);
-
         Map<String, Object> hierarchyMap = new HashMap<>();
         hierarchyMap.put("source", "provider");
         hierarchyMap.put("name", "coursename");
@@ -339,6 +340,132 @@ class AssessmentServiceV5ImplMethodTest {
         } catch (Exception e) {
             fail("Method threw an exception: " + e.getCause());
         }
+    }
+
+
+    @Test
+    void testCalculateSectionFinalResults_pass() throws Exception {
+        Method method = getMethod();
+
+        List<Map<String, Object>> sectionLevelResults = List.of(
+                new HashMap<>(Map.of(
+                        Constants.RESULT, 80.0,
+                        Constants.BLANK, 1,
+                        Constants.CORRECT, 4,
+                        Constants.INCORRECT, 1,
+                        Constants.PASS_PERCENTAGE, 50,
+                        Constants.SECTION_MARKS, 40.0,
+                        Constants.TOTAL_MARKS, 50
+                )),
+                new HashMap<>(Map.of(
+                        Constants.RESULT, 90.0,
+                        Constants.BLANK, 0,
+                        Constants.CORRECT, 5,
+                        Constants.INCORRECT, 0,
+                        Constants.PASS_PERCENTAGE, 60,
+                        Constants.SECTION_MARKS, 45.0,
+                        Constants.TOTAL_MARKS, 50
+                ))
+        );
+
+        Map<String, Object> result = (Map<String, Object>) method.invoke(service,
+                sectionLevelResults, 1000L, 5000L, 3, 70);
+
+        assertNotNull(result);
+        assertEquals(2, ((List<?>) result.get(Constants.CHILDREN)).size());
+        assertEquals(3, result.get(Constants.MAX_ASSESSMENT_RETAKE_ATTEMPTS) instanceof Integer ? 3 : 0);
+        assertTrue((Double) result.get(Constants.TOTAL_PERCENTAGE) >= 70);
+        assertTrue((Boolean) result.get(Constants.PASS));
+        assertEquals(4 + 5, result.get(Constants.CORRECT));
+        assertEquals(1 + 0, result.get(Constants.INCORRECT));
+        assertEquals(1 + 0, result.get(Constants.BLANK));
+    }
+
+    @Test
+    void testCalculateSectionFinalResults_fail() throws Exception {
+        Method method = getMethod();
+
+        List<Map<String, Object>> sectionLevelResults = List.of(
+                new HashMap<>(Map.of(
+                        Constants.RESULT, 30.0,
+                        Constants.BLANK, 2,
+                        Constants.CORRECT, 0,
+                        Constants.INCORRECT, 0,
+                        Constants.PASS_PERCENTAGE, 50
+                        // no SECTION_MARKS or TOTAL_MARKS
+                ))
+        );
+
+        Map<String, Object> result = (Map<String, Object>) method.invoke(service,
+                sectionLevelResults, 2000L, 4000L, 2, 50);
+
+        assertNotNull(result);
+        assertEquals(2000L, result.get(Constants.TIME_TAKEN_FOR_ASSESSMENT));
+        assertEquals(0, result.get(Constants.OVERALL_RESULT)); // correct + incorrect = 0
+        assertFalse((Boolean) result.get(Constants.PASS));
+        assertEquals(0.0, (Double) result.get(Constants.TOTAL_SECTION_MARKS));
+        assertEquals(0, result.get(Constants.TOTAL_MARKS));
+    }
+
+    @Test
+    void testSendMessageToKafkaForCertificate() throws Exception {
+        Map<String, Object> submitRequest = new HashMap<>();
+        submitRequest.put(Constants.IDENTIFIER, "assessmentId");
+
+        String email = "test@example.com";
+        String contextId = "contextId";
+        String assessmentId = "assessmentId";
+
+        // Mock DB response
+        Map<String, Object> userData = new HashMap<>();
+        userData.put(Constants.NAME, "Test User");
+        when(assessmentRepository.fetchUserAssessmentDataFromDB(email, assessmentId))
+                .thenReturn(Collections.singletonList(userData));
+
+        // Mock Cassandra
+        Map<String, Object> hierarchyMap = new HashMap<>();
+        hierarchyMap.put(Constants.HIERARCHY, "{\"source\":\"TestProvider\",\"name\":\"TestCourse\",\"posterImage\":\"img.png\"}");
+        when(cassandraOperation.getRecordsByProperties(any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(hierarchyMap));
+
+        // Mock JSON Node
+        JsonNode jsonNode = mock(JsonNode.class);
+        Resource resource = mock(Resource.class);
+        InputStream jsonStream = new ByteArrayInputStream("{}".getBytes());
+
+        when(resourceLoader.getResource("classpath:certificate-kafka-json.json")).thenReturn(resource);
+        when(resource.getInputStream()).thenReturn(jsonStream);
+        when(mapper.readTree(any(InputStream.class))).thenReturn(jsonNode);
+
+        // Mock decryption
+        when(decryptionService.decryptData(email)).thenReturn("decryptedEmail");
+
+        // Mock mapper.readValue
+        Map<String, Object> contentHierarchyObj = new HashMap<>();
+        contentHierarchyObj.put(Constants.SOURCE, "TestProvider");
+        contentHierarchyObj.put(Constants.NAME, "TestCourse");
+        contentHierarchyObj.put(Constants.POSTER_IMAGE, "img.png");
+        when(mapper.readValue(anyString(), eq(HashMap.class))).thenReturn((HashMap) contentHierarchyObj);
+
+        // Act: invoke private method
+        Method method = AssessmentServiceV5Impl.class.getDeclaredMethod(
+                "sendMessageToKafkaForCertificate", Map.class, String.class, String.class, String.class);
+        method.setAccessible(true);
+        method.invoke(service, submitRequest, email, contextId, assessmentId);
+
+        // Verify
+        verify(kafkaCertificateProducerService, times(1))
+                .replacePlaceholders(eq(jsonNode), anyMap());
+        verify(producer, times(1))
+                .push(any(), eq(jsonNode));
+    }
+
+    private Method getMethod() throws Exception {
+        Method method = AssessmentServiceV5Impl.class.getDeclaredMethod(
+                "calculateSectionFinalResults",
+                List.class, long.class, long.class, int.class, int.class);
+        method.setAccessible(true);
+        return method;
     }
 }
 
