@@ -29,7 +29,7 @@ import java.util.*;
 @Service
 public class KafkaCertificateProducerServiceImpl implements KafkaCertificateProducerService {
     private ObjectMapper mapper = new ObjectMapper();
-    private final Logger log = LoggerFactory.getLogger(KafkaCertificateProducerServiceImpl.class);
+    private static Logger log = LoggerFactory.getLogger(KafkaCertificateProducerServiceImpl.class);
 
     @Autowired
     RestTemplate restTemplate;
@@ -52,7 +52,7 @@ public class KafkaCertificateProducerServiceImpl implements KafkaCertificateProd
             Date parsedDate = dateFormat.parse(dateString);
             return new Timestamp(parsedDate.getTime());
         } catch (ParseException e) {
-            e.printStackTrace();
+            log.error("Error while parsing date: " + dateString, e);
             return null;
         }
     }

@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * This class will be used to read cassandratablecolumn properties file.
  * @author fathima
@@ -15,6 +18,7 @@ public class CassandraPropertyReader {
 	private final Properties properties = new Properties();
 	  private static final String file = "cassandratablecolumn.properties";
 	  private static CassandraPropertyReader cassandraPropertyReader = null;
+	  public static Logger logger = LoggerFactory.getLogger(CassandraPropertyReader.class.getName());
 
 	  /** private default constructor 
 	 * @throws IOException */
@@ -34,8 +38,7 @@ public class CassandraPropertyReader {
 	          try {
 				cassandraPropertyReader = new CassandraPropertyReader();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				logger.error("Exception while initializing cassandra instance.", e);
 			}
 	        }
 	      }
