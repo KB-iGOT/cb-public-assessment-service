@@ -2,6 +2,8 @@ FROM eclipse-temurin:11-jdk
 
 RUN useradd -ms /bin/bash appuser
 
+RUN mkdir -p /opt
+
 RUN apt-get update \
     && apt-get install -y \
         curl \
