@@ -1,4 +1,4 @@
-FROM openjdk:11
+FROM openjdk:11-jdk-slim-bullseye
 
 RUN useradd -ms /bin/bash appuser
 
