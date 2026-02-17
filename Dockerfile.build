@@ -1,4 +1,4 @@
-FROM openjdk:11-jdk-slim-bullseye
+FROM openjdk:11.0.20-jdk-slim
 
 RUN apt update && apt install maven -y
 
