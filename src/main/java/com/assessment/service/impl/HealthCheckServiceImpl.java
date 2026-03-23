@@ -3,9 +3,9 @@ package com.assessment.service.impl;
 import com.assessment.model.SBApiResponse;
 import com.assessment.service.HealthCheckService;
 import com.assessment.util.Constants;
+import com.assessment.util.ProjectUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.cassandra.core.CassandraAdminTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -23,63 +23,62 @@ public class HealthCheckServiceImpl implements HealthCheckService {
 
     private static final Logger logger = LoggerFactory.getLogger(HealthCheckServiceImpl.class);
 
-    private static final String STATUS = "status";
-    private static final String UP = "UP";
-    private static final String DOWN = "DOWN";
+    private final JedisPool jedisPool;
+    private final CassandraAdminTemplate cassandraTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
-    @Autowired
-    private JedisPool jedisPool;
-
-    @Autowired
-    private CassandraAdminTemplate cassandraTemplate;
-
-    @Autowired
-    private KafkaTemplate<String, String> kafkaTemplate;
+    // Constructor Injection
+    public HealthCheckServiceImpl(JedisPool jedisPool,
+                                  CassandraAdminTemplate cassandraTemplate,
+                                  KafkaTemplate<String, String> kafkaTemplate) {
+        this.jedisPool = jedisPool;
+        this.cassandraTemplate = cassandraTemplate;
+        this.kafkaTemplate = kafkaTemplate;
+    }
 
     @Override
     public SBApiResponse checkHealth() {
 
-        SBApiResponse response = new SBApiResponse("api.health.check");
+        SBApiResponse response = new SBApiResponse(Constants.HEALTH_CHECK_API);
         List<Map<String, Object>> checks = new ArrayList<>();
-        boolean allHealthy = true;
 
         Map<String, Object> redis = checkRedis();
         Map<String, Object> cassandra = checkCassandra();
         Map<String, Object> kafka = checkKafka();
 
-        boolean redisHealthy = UP.equals(redis.get(STATUS));
-        boolean cassandraHealthy = UP.equals(cassandra.get(STATUS));
-        boolean kafkaHealthy = UP.equals(kafka.get(STATUS));
+        boolean redisHealthy = Constants.UP.equals(redis.get(Constants.STATUS));
+        boolean cassandraHealthy = Constants.UP.equals(cassandra.get(Constants.STATUS));
+        boolean kafkaHealthy = Constants.UP.equals(kafka.get(Constants.STATUS));
 
-        Map<String, Object> cassandraCheck = new HashMap<>();
-        cassandraCheck.put(Constants.HEALTHY, cassandraHealthy);
-        cassandraCheck.put(Constants.NAME, Constants.CASSANDRA_NAME);
-        checks.add(cassandraCheck);
+        checks.add(ProjectUtil.createDefaultMapResponse(
+                Constants.CASSANDRA_NAME,
+                cassandraHealthy,
+                (Exception) cassandra.get(Constants.EXCEPTION)
+        ));
 
-        Map<String, Object> redisCheck = new HashMap<>();
-        redisCheck.put(Constants.HEALTHY, redisHealthy);
-        redisCheck.put(Constants.NAME,Constants.REDIS_NAME);
-        checks.add(redisCheck);
+        checks.add(ProjectUtil.createDefaultMapResponse(
+                Constants.REDIS_NAME,
+                redisHealthy,
+                (Exception) redis.get(Constants.EXCEPTION)
+        ));
 
-        Map<String, Object> kafkaCheck = new HashMap<>();
-        kafkaCheck.put(Constants.HEALTHY, kafkaHealthy);
-        kafkaCheck.put(Constants.NAME, Constants.KAFKA_NAME);
-        checks.add(kafkaCheck);
-        if (!redisHealthy || !cassandraHealthy || !kafkaHealthy) {
-            allHealthy = false;
-        }
-        if (allHealthy) {
-            response.getParams().setStatus(Constants.SUCCESS);
-            response.getParams().setErr(null);
-            response.getParams().setErrmsg(null);
-        } else {
-            response.getParams().setStatus(Constants.FAILED);
-            response.getParams().setErr("SERVICE_UNAVAILABLE");
-            response.getParams().setErrmsg("One or more dependent services are down");
-        }
-        response.put(Constants.CHECKS, checks);
-        response.put(Constants.HEALTHY, allHealthy);
-        response.setResponseCode(allHealthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
+        checks.add(ProjectUtil.createDefaultMapResponse(
+                Constants.KAFKA_NAME,
+                kafkaHealthy,
+                (Exception) kafka.get(Constants.EXCEPTION)
+        ));
+
+        response.getParams().setStatus(Constants.SUCCESS);
+        response.getParams().setErr(null);
+        response.getParams().setErrmsg(null);
+        response.setResponseCode(HttpStatus.OK);
+
+        Map<String, Object> responseObj = new HashMap<>();
+        responseObj.put(Constants.CHECKS, checks);
+        responseObj.put(Constants.HEALTHY, true);
+        responseObj.put(Constants.NAME, Constants.HEALTH_CHECK_NAME);
+        response.put(Constants.RESPONSE, responseObj);
+
         return response;
     }
 
@@ -87,10 +86,12 @@ public class HealthCheckServiceImpl implements HealthCheckService {
         Map<String, Object> result = new HashMap<>();
         try (Jedis jedis = jedisPool.getResource()) {
             String pong = jedis.ping();
-            result.put(STATUS, "PONG".equals(pong) ? UP : DOWN);
+            result.put(Constants.STATUS, "PONG".equals(pong) ? Constants.UP : Constants.DOWN);
+            result.put(Constants.EXCEPTION, null);
         } catch (Exception e) {
-            logger.error("Redis health failed", e);
-            result.put(STATUS, DOWN);
+            logger.error("Redis health failed: {}", e.getMessage(), e);
+            result.put(Constants.STATUS, Constants.DOWN);
+            result.put(Constants.EXCEPTION, e);
         }
         return result;
     }
@@ -98,12 +99,13 @@ public class HealthCheckServiceImpl implements HealthCheckService {
     private Map<String, Object> checkCassandra() {
         Map<String, Object> result = new HashMap<>();
         try {
-            cassandraTemplate.getCqlOperations()
-                    .execute("SELECT release_version FROM system.local");
-            result.put(STATUS, UP);
+            cassandraTemplate.getCqlOperations().execute("SELECT release_version FROM system.local");
+            result.put(Constants.STATUS, Constants.UP);
+            result.put(Constants.EXCEPTION, null);
         } catch (Exception e) {
-            logger.error("Cassandra health failed", e);
-            result.put(STATUS, DOWN);
+            logger.error("Cassandra health failed: {}", e.getMessage(), e);
+            result.put(Constants.STATUS, Constants.DOWN);
+            result.put(Constants.EXCEPTION, e);
         }
         return result;
     }
@@ -113,10 +115,12 @@ public class HealthCheckServiceImpl implements HealthCheckService {
         try {
             kafkaTemplate.execute(producer ->
                     producer.partitionsFor("health-topic"));
-            result.put(STATUS, UP);
+            result.put(Constants.STATUS, Constants.UP);
+            result.put(Constants.EXCEPTION, null);
         } catch (Exception e) {
-            logger.error("Kafka health failed", e);
-            result.put(STATUS, DOWN);
+            logger.error("Kafka health failed: {}", e.getMessage(), e);
+            result.put(Constants.STATUS, Constants.DOWN);
+            result.put(Constants.EXCEPTION, e);
         }
         return result;
     }
