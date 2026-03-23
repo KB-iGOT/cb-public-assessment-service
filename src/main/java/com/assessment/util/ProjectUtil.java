@@ -65,6 +65,15 @@ public class ProjectUtil {
         return response;
     }
 
+    public static Map<String, Object> createDefaultMapResponse(String serviceName, boolean healthy, Exception e) {
+        Map<String, Object> response = new HashMap<>();
+        response.put(Constants.NAME, serviceName);
+        response.put(Constants.HEALTHY, healthy);
+        response.put(Constants.ERR, healthy ? "" : Constants.ERR_CODE_SERVER_ERROR);
+        response.put(Constants.ERRMSG, healthy ? "" : (e != null ? e.getMessage() : "Service is unavailable"));
+        return response;
+    }
+
     public static Map<String, String> getDefaultHeaders() {
         Map<String, String> headers = new HashMap<String, String>();
         headers.put(Constants.CONTENT_TYPE, Constants.APPLICATION_JSON);

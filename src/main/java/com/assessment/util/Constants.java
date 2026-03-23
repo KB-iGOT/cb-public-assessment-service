@@ -227,6 +227,19 @@ public class Constants {
 	public static final String ISSUED_CERTIFICATE  = "issued_certificates";
 	public static final String CERT_PUBLIC_URL ="cert_publicurl";
 	public static final String COURSE_COMPLETE_SUBJECT = "Course Completion Certificate";
+	public static final String UP = "UP";
+	public static final String DOWN = "DOWN";
+	public static final String HEALTHY = "healthy";
+	public static final String CHECKS = "checks";
+	public static final String ERR = "err";
+	public static final String ERRMSG = "errmsg";
+	public static final String CASSANDRA_NAME = "cassandra db";
+	public static final String REDIS_NAME = "redis cache";
+	public static final String KAFKA_NAME = "kafka";
+	public static final String HEALTH_CHECK_API = "api.all.health";
+	public static final String HEALTH_CHECK_NAME = "Complete health check api";
+	public static final int ERR_CODE_SERVER_ERROR = 500;
+	public static final String EXCEPTION = "exception";
 
 	private Constants() {
 		throw new IllegalStateException("Utility class");
